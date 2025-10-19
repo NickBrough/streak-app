@@ -9,12 +9,13 @@ export default function StreakDisplay({
   days,
   currentStreak,
 }: StreakDisplayProps) {
+  const unit = currentStreak === 1 ? "day" : "days";
   return (
     <View>
       <Text style={styles.label}>Current Streak</Text>
       <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 8 }}>
         <Text style={styles.streak}>{currentStreak}</Text>
-        <Text style={styles.streakUnit}>days 🔥</Text>
+        <Text style={styles.streakUnit}>{unit} 🔥</Text>
       </View>
       <Text style={styles.subLabel}>7 day challenge</Text>
       <View style={styles.rowDots}>
