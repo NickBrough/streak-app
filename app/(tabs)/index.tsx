@@ -138,7 +138,14 @@ export default function HomeScreen() {
           { paddingTop: insets.top + 16, paddingBottom: 120 },
         ]}
       >
-        <Text style={styles.heading}>Today</Text>
+        {/* Header */}
+        <View style={styles.headerRow}>
+          <View>
+            <Text style={styles.greetLabel}>Today</Text>
+            <Text style={styles.heading}>Keep your streak alive</Text>
+          </View>
+          <View style={styles.avatarChip} />
+        </View>
         <View style={styles.cardGlow}>
           <StreakDisplay days={last7Days} currentStreak={streak} />
         </View>
@@ -151,6 +158,7 @@ export default function HomeScreen() {
               emoji={ex.emoji}
               goal={ex.goal}
               current={totals[ex.exercise_id] ?? 0}
+              onStart={() => startExercise(ex.exercise_id)}
             />
           ))}
         </View>
@@ -224,9 +232,24 @@ const styles = StyleSheet.create({
   },
   heading: {
     color: "#e6f0f2",
-    fontSize: 24,
-    fontWeight: "700",
-    marginBottom: 12,
+    fontSize: 22,
+    fontWeight: "800",
+    marginBottom: 6,
+  },
+  greetLabel: { color: "#94a3b8", fontSize: 12 },
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 10,
+  },
+  avatarChip: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255,255,255,0.12)",
   },
   cardGlow: {
     backgroundColor: "rgba(15, 23, 32, 0.9)",
