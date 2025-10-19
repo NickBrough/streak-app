@@ -3,6 +3,7 @@
     "name": "streak-app",
     "slug": "streak-app",
     "version": "1.0.0",
+    "scheme": "streak",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -13,7 +14,8 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.nickbrough.streak-app"
     },
     "android": {
       "adaptiveIcon": {
@@ -25,6 +27,16 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      "expo-router",
+      "expo-dev-client",
+      [
+        "expo-sensors",
+        {
+          "motionPermission": "Allow Streak to use motion sensors to count your reps"
+        }
+      ]
+    ]
   }
 }
