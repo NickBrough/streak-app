@@ -23,6 +23,7 @@ import Animated, {
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import ConfettiCannon from "react-native-confetti-cannon";
+import Avatar from "@/components/ui/Avatar";
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
@@ -156,7 +157,7 @@ export default function HomeScreen() {
             <Text style={styles.greetLabel}>Today</Text>
             <Text style={styles.heading}>Keep your streak alive</Text>
           </View>
-          <View style={styles.avatarChip} />
+          <Avatar name={user?.email ?? ""} size={36} />
         </View>
         <View style={styles.cardGlow}>
           <StreakDisplay days={last7Days} currentStreak={streak} />
