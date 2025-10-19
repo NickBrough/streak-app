@@ -6,6 +6,7 @@ interface ExerciseCardProps {
   goal: number;
   emoji: string;
   onStart?: () => void;
+  highlight?: boolean;
 }
 
 export default function ExerciseCard({
@@ -14,11 +15,12 @@ export default function ExerciseCard({
   goal,
   emoji,
   onStart,
+  highlight = false,
 }: ExerciseCardProps) {
   const isComplete = current >= goal;
   const progress = Math.max(0, Math.min(1, current / Math.max(1, goal)));
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, highlight && styles.cardHighlight]}>
       <View style={styles.row}>
         <Text style={styles.emoji}>{emoji}</Text>
         <View style={{ flex: 1 }}>
@@ -44,6 +46,13 @@ export default function ExerciseCard({
 
 const styles = StyleSheet.create({
   card: { gap: 10 },
+  cardHighlight: {
+    backgroundColor: "rgba(32,229,229,0.06)",
+    borderRadius: 16,
+    padding: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(32,229,229,0.25)",
+  },
   row: { flexDirection: "row", alignItems: "center", gap: 12 },
   emoji: { fontSize: 24 },
   name: { color: "#e6f0f2", fontSize: 16, fontWeight: "700" },

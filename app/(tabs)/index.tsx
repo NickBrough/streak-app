@@ -22,6 +22,7 @@ import Animated, {
   Easing,
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
+import ConfettiCannon from "react-native-confetti-cannon";
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
@@ -44,6 +45,7 @@ export default function HomeScreen() {
   );
   const [streak, setStreak] = useState(0);
   const [launcherOpen, setLauncherOpen] = useState(false);
+  const [dayConfetti, setDayConfetti] = useState(false);
 
   const opacity = useSharedValue(0);
   const translateY = useSharedValue(40);
@@ -106,6 +108,7 @@ export default function HomeScreen() {
         if (todayData) {
           setTotals(todayData.totals as any);
           setStreak(todayData.streak ?? 0);
+          if (todayData.met_goal) setDayConfetti(true);
         } else {
           setTotals({ pushup: 0, squat: 0 });
           setStreak(0);
@@ -138,6 +141,15 @@ export default function HomeScreen() {
           { paddingTop: insets.top + 16, paddingBottom: 120 },
         ]}
       >
+        {dayConfetti && (
+          <ConfettiCannon
+            count={160}
+            origin={{ x: 0, y: 0 }}
+            fadeOut
+            autoStart
+            onAnimationEnd={() => setDayConfetti(false)}
+          />
+        )}
         {/* Header */}
         <View style={styles.headerRow}>
           <View>
@@ -151,16 +163,25 @@ export default function HomeScreen() {
         </View>
         <View style={{ height: 12 }} />
         <View style={styles.cardGlass}>
-          {exercises.map((ex) => (
-            <ExerciseCard
-              key={ex.id}
-              name={ex.name}
-              emoji={ex.emoji}
-              goal={ex.goal}
-              current={totals[ex.exercise_id] ?? 0}
-              onStart={() => startExercise(ex.exercise_id)}
-            />
-          ))}
+          {exercises.map((ex) => {
+            const cur = totals[ex.exercise_id] ?? 0;
+            const complete = cur >= ex.goal;
+            const anyIncompleteExists = exercises.some(
+              (e) => (totals[e.exercise_id] ?? 0) < e.goal
+            );
+            const highlight = anyIncompleteExists && !complete;
+            return (
+              <ExerciseCard
+                key={ex.id}
+                name={ex.name}
+                emoji={ex.emoji}
+                goal={ex.goal}
+                current={cur}
+                highlight={highlight}
+                onStart={() => startExercise(ex.exercise_id)}
+              />
+            );
+          })}
         </View>
         <View style={{ height: 20 }} />
         <Button title="Start Workout" onPress={openLauncher} />

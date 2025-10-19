@@ -7,6 +7,7 @@ import { router } from "expo-router";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import * as Haptics from "expo-haptics";
+import ConfettiCannon from "react-native-confetti-cannon";
 
 export default function WorkoutScreen() {
   const { exerciseId } = useLocalSearchParams<{
@@ -37,6 +38,10 @@ export default function WorkoutScreen() {
 
   return (
     <View style={styles.container}>
+      {/* Confetti when goal hit */}
+      {repCount > 0 && repCount % 10 === 0 && (
+        <ConfettiCannon count={120} origin={{ x: 0, y: 0 }} fadeOut autoStart />
+      )}
       <Text style={styles.title}>{exerciseId?.toUpperCase()}</Text>
       <Text style={styles.counter}>{repCount}</Text>
       <Text style={styles.caption}>{isActive ? "Listening…" : "Paused"}</Text>
