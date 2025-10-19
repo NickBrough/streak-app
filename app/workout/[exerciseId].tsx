@@ -13,7 +13,6 @@ export default function WorkoutScreen() {
     exerciseId: "pushup" | "squat";
   }>();
   const [repCount, setRepCount] = useState(0);
-  const [mode, setMode] = useState<"auto" | "manual">("auto");
   const { user } = useAuth();
   const [sessionId, setSessionId] = useState<string | null>(null);
 
@@ -31,126 +30,67 @@ export default function WorkoutScreen() {
         .select()
         .single();
       if (!error && data) setSessionId(data.id);
-      if (mode === "auto") startDetection();
+      startDetection();
     })();
     return () => stopDetection();
   }, []);
 
-  useEffect(() => {
-    if (mode === "auto") {
-      startDetection();
-    } else {
-      stopDetection();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode]);
-
   return (
     <View style={styles.container}>
       <Text style={styles.title}>{exerciseId?.toUpperCase()}</Text>
+      <Text style={styles.counter}>{repCount}</Text>
+      <Text style={styles.caption}>{isActive ? "Listening…" : "Paused"}</Text>
 
-      {/* Mode toggle */}
-      <View style={styles.segment}>
+      {/* Subtle manual correction controls (always available) */}
+      <View style={{ height: 20 }} />
+      <View style={styles.controlsRow}>
         <TouchableOpacity
-          onPress={() => setMode("auto")}
           style={[
-            styles.segmentBtn,
-            mode === "auto" && styles.segmentBtnActive,
+            styles.circleBtn,
+            {
+              backgroundColor: "#10202a",
+              borderColor: "rgba(255,255,255,0.08)",
+            },
           ]}
+          onPress={async () => {
+            await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setRepCount((p) => Math.max(0, p - 1));
+          }}
         >
-          <Text
-            style={[
-              styles.segmentText,
-              mode === "auto" && styles.segmentTextActive,
-            ]}
-          >
-            Auto
-          </Text>
+          <Text style={styles.circleText}>-1</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          onPress={() => setMode("manual")}
-          style={[
-            styles.segmentBtn,
-            mode === "manual" && styles.segmentBtnActive,
-          ]}
+          style={[styles.circleBtnLarge, { backgroundColor: "#20e5e5" }]}
+          onPress={async () => {
+            await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+            setRepCount((p) => p + 1);
+          }}
         >
-          <Text
-            style={[
-              styles.segmentText,
-              mode === "manual" && styles.segmentTextActive,
-            ]}
-          >
-            Manual
-          </Text>
+          <Text style={[styles.circleTextLarge, { color: "#06121a" }]}>+1</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.circleBtn,
+            {
+              backgroundColor: "#10202a",
+              borderColor: "rgba(255,255,255,0.08)",
+            },
+          ]}
+          onPress={async () => {
+            await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            setRepCount((p) => p + 5);
+          }}
+        >
+          <Text style={styles.circleText}>+5</Text>
         </TouchableOpacity>
       </View>
 
-      <Text style={styles.counter}>{repCount}</Text>
-      <Text style={styles.caption}>
-        {mode === "auto"
-          ? isActive
-            ? "Listening…"
-            : "Paused"
-          : "Manual entry"}
-      </Text>
-
-      {mode === "auto" ? (
-        <>
-          <View style={{ height: 20 }} />
-          <Button
-            title={isActive ? "Pause" : "Resume"}
-            variant="outline"
-            onPress={() => (isActive ? stopDetection() : startDetection())}
-          />
-        </>
-      ) : (
-        <>
-          <View style={{ height: 28 }} />
-          <View style={styles.controlsRow}>
-            <TouchableOpacity
-              style={[
-                styles.circleBtn,
-                {
-                  backgroundColor: "#10202a",
-                  borderColor: "rgba(255,255,255,0.08)",
-                },
-              ]}
-              onPress={async () => {
-                await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                setRepCount((p) => Math.max(0, p - 1));
-              }}
-            >
-              <Text style={styles.circleText}>-1</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.circleBtnLarge, { backgroundColor: "#20e5e5" }]}
-              onPress={async () => {
-                await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-                setRepCount((p) => p + 1);
-              }}
-            >
-              <Text style={[styles.circleTextLarge, { color: "#06121a" }]}>
-                +1
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.circleBtn,
-                {
-                  backgroundColor: "#10202a",
-                  borderColor: "rgba(255,255,255,0.08)",
-                },
-              ]}
-              onPress={async () => {
-                await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                setRepCount((p) => p + 5);
-              }}
-            >
-              <Text style={styles.circleText}>+5</Text>
-            </TouchableOpacity>
-          </View>
-        </>
-      )}
+      <View style={{ height: 16 }} />
+      <Button
+        title={isActive ? "Pause Auto" : "Resume Auto"}
+        variant="outline"
+        onPress={() => (isActive ? stopDetection() : startDetection())}
+      />
       <View style={{ height: 12 }} />
       <Button
         title="End Workout"
