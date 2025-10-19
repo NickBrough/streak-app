@@ -7,8 +7,8 @@ import {
   TouchableOpacity,
   Dimensions,
 } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Screen from "@/components/ui/Screen";
 import Button from "@/components/ui/Button";
 import { router } from "expo-router";
 import StreakDisplay from "@/components/StreakDisplay";
@@ -131,62 +131,51 @@ export default function HomeScreen() {
   }, [user]);
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#04080d" }}>
-      <LinearGradient
-        colors={["#071018", "#06121f", "#051826"]}
-        style={StyleSheet.absoluteFill}
-      />
-      <ScrollView
-        contentContainerStyle={[
-          styles.container,
-          { paddingTop: insets.top + 16, paddingBottom: 120 },
-        ]}
-      >
-        {dayConfetti && (
-          <ConfettiCannon
-            count={160}
-            origin={{ x: 0, y: 0 }}
-            fadeOut
-            autoStart
-            onAnimationEnd={() => setDayConfetti(false)}
-          />
-        )}
-        {/* Header */}
-        <View style={styles.headerRow}>
-          <View>
-            <Text style={styles.greetLabel}>Today</Text>
-            <Text style={styles.heading}>Keep your streak alive</Text>
-          </View>
-          <Avatar name={user?.email ?? ""} size={36} />
+    <Screen scroll contentStyle={styles.container}>
+      {dayConfetti && (
+        <ConfettiCannon
+          count={160}
+          origin={{ x: 0, y: 0 }}
+          fadeOut
+          autoStart
+          onAnimationEnd={() => setDayConfetti(false)}
+        />
+      )}
+      {/* Header */}
+      <View style={styles.headerRow}>
+        <View>
+          <Text style={styles.greetLabel}>Today</Text>
+          <Text style={styles.heading}>Keep your streak alive</Text>
         </View>
-        <View style={styles.cardGlow}>
-          <StreakDisplay days={last7Days} currentStreak={streak} />
-        </View>
-        <View style={{ height: 12 }} />
-        <View style={styles.cardGlass}>
-          {exercises.map((ex) => {
-            const cur = totals[ex.exercise_id] ?? 0;
-            const complete = cur >= ex.goal;
-            const anyIncompleteExists = exercises.some(
-              (e) => (totals[e.exercise_id] ?? 0) < e.goal
-            );
-            const highlight = anyIncompleteExists && !complete;
-            return (
-              <ExerciseCard
-                key={ex.id}
-                name={ex.name}
-                emoji={ex.emoji}
-                goal={ex.goal}
-                current={cur}
-                highlight={highlight}
-                onStart={() => startExercise(ex.exercise_id)}
-              />
-            );
-          })}
-        </View>
-        <View style={{ height: 20 }} />
-        <Button title="Start Workout" onPress={openLauncher} />
-      </ScrollView>
+        <Avatar name={user?.email ?? ""} size={36} />
+      </View>
+      <View style={styles.cardGlow}>
+        <StreakDisplay days={last7Days} currentStreak={streak} />
+      </View>
+      <View style={{ height: 12 }} />
+      <View style={styles.cardGlass}>
+        {exercises.map((ex) => {
+          const cur = totals[ex.exercise_id] ?? 0;
+          const complete = cur >= ex.goal;
+          const anyIncompleteExists = exercises.some(
+            (e) => (totals[e.exercise_id] ?? 0) < e.goal
+          );
+          const highlight = anyIncompleteExists && !complete;
+          return (
+            <ExerciseCard
+              key={ex.id}
+              name={ex.name}
+              emoji={ex.emoji}
+              goal={ex.goal}
+              current={cur}
+              highlight={highlight}
+              onStart={() => startExercise(ex.exercise_id)}
+            />
+          );
+        })}
+      </View>
+      <View style={{ height: 20 }} />
+      <Button title="Start Workout" onPress={openLauncher} />
 
       {launcherOpen && (
         <Animated.View
@@ -243,7 +232,7 @@ export default function HomeScreen() {
           </Animated.View>
         </Animated.View>
       )}
-    </View>
+    </Screen>
   );
 }
 

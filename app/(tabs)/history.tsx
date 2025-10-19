@@ -9,6 +9,7 @@ import {
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import Svg, { Circle } from "react-native-svg";
+import Screen from "@/components/ui/Screen";
 
 type DayRec = {
   date: string;
@@ -59,7 +60,7 @@ export default function HistoryScreen() {
   }, [days]);
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <Screen scroll contentStyle={styles.container}>
       <Text style={styles.heading}>History</Text>
 
       {/* Weekly streak ring */}
@@ -100,7 +101,7 @@ export default function HistoryScreen() {
           </Text>
         </View>
       )}
-    </ScrollView>
+    </Screen>
   );
 }
 
@@ -141,7 +142,7 @@ function Ring({ value, max }: { value: number; max: number }) {
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 20, backgroundColor: "#04080d" },
+  container: { padding: 0 },
   heading: {
     color: "#e6f0f2",
     fontSize: 22,

@@ -4,6 +4,7 @@ import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/lib/supabase";
+import Screen from "@/components/ui/Screen";
 
 export default function SettingsScreen() {
   const { user, signOut } = useAuth();
@@ -43,7 +44,7 @@ export default function SettingsScreen() {
   }, [user]);
 
   return (
-    <View style={styles.container}>
+    <Screen scroll contentStyle={{ paddingHorizontal: 20 }}>
       <Text style={styles.heading}>Settings</Text>
 
       <Text style={styles.section}>Profile</Text>
@@ -110,12 +111,11 @@ export default function SettingsScreen() {
 
       <View style={{ height: 12 }} />
       <Button title="Sign Out" variant="outline" onPress={signOut} />
-    </View>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#04080d", padding: 20 },
   heading: {
     color: "#e6f0f2",
     fontSize: 24,
