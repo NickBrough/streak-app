@@ -1,5 +1,6 @@
 import React from "react";
 import { Tabs } from "expo-router";
+import { BlurView } from "expo-blur";
 import { Home, Clock, Users, Settings } from "lucide-react-native";
 
 export default function TabLayout() {
@@ -9,23 +10,26 @@ export default function TabLayout() {
         headerShown: false,
         tabBarActiveTintColor: "#20e5e5",
         tabBarInactiveTintColor: "#94a3b8",
+        tabBarHideOnKeyboard: true,
         tabBarStyle: {
           position: "absolute",
-          left: 16,
-          right: 16,
-          bottom: 18,
-          height: 64,
-          paddingBottom: 6,
-          backgroundColor: "rgba(11, 15, 20, 0.9)",
+          left: 12,
+          right: 12,
+          bottom: 8,
+          height: 60,
+          paddingBottom: 4,
+          backgroundColor: "transparent",
           borderTopColor: "transparent",
-          borderRadius: 20,
-          shadowColor: "#00e5e5",
-          shadowOpacity: 0.15,
-          shadowRadius: 12,
-          shadowOffset: { width: 0, height: 6 },
-          elevation: 8,
         },
-        tabBarLabelStyle: { fontSize: 12 },
+        tabBarBackground: () => (
+          <BlurView
+            intensity={25}
+            tint="dark"
+            style={{ flex: 1, borderRadius: 18, overflow: "hidden" }}
+          />
+        ),
+        tabBarItemStyle: { paddingTop: 6 },
+        tabBarLabelStyle: { fontSize: 11 },
         sceneStyle: { backgroundColor: "#0b0f14" },
       }}
     >
