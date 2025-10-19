@@ -40,6 +40,8 @@ const styles = StyleSheet.create({
     textShadowColor: "rgba(32,229,229,0.5)",
     textShadowRadius: 18,
     textShadowOffset: { width: 0, height: 0 },
+    paddingHorizontal: 14,
+    paddingVertical: 2,
   },
   streakUnit: { color: "#94a3b8", fontSize: 14, marginBottom: 6 },
   rowDots: { flexDirection: "row", gap: 10 },

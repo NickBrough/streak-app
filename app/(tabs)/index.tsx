@@ -275,11 +275,12 @@ const styles = StyleSheet.create({
   cardGlow: {
     backgroundColor: "rgba(15, 23, 32, 0.9)",
     borderRadius: 20,
-    padding: 16,
+    padding: 20,
     shadowColor: "#00e5e5",
     shadowOpacity: 0.25,
     shadowRadius: 24,
     shadowOffset: { width: 0, height: 10 },
+    overflow: "visible",
   },
   cardGlass: {
     backgroundColor: "rgba(15, 23, 32, 0.7)",
@@ -287,6 +288,7 @@ const styles = StyleSheet.create({
     padding: 16,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: "rgba(255,255,255,0.06)",
+    gap: 14,
   },
   launcherOverlay: {
     backgroundColor: "rgba(0,0,0,0.35)",
