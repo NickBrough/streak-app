@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
-import { useLocalSearchParams } from "expo-router";
 import { useMotionDetector } from "@/hooks/useMotionDetector";
 import Button from "@/components/ui/Button";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import * as Haptics from "expo-haptics";
@@ -14,7 +13,7 @@ export default function WorkoutScreen() {
     exerciseId: "pushup" | "squat";
   }>();
   const [repCount, setRepCount] = useState(0);
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const [sessionId, setSessionId] = useState<string | null>(null);
 
   const { isActive, startDetection, stopDetection } = useMotionDetector({
@@ -23,18 +22,24 @@ export default function WorkoutScreen() {
   });
 
   useEffect(() => {
+    if (loading || !user || sessionId) return;
+    let isActiveMounted = true;
     (async () => {
-      if (!user) return;
       const { data, error } = await supabase
         .from("sessions")
         .insert({ user_id: user.id, mode: "motion" })
         .select()
         .single();
-      if (!error && data) setSessionId(data.id);
-      startDetection();
+      if (!error && data && isActiveMounted) {
+        setSessionId(data.id);
+        startDetection();
+      }
     })();
-    return () => stopDetection();
-  }, []);
+    return () => {
+      isActiveMounted = false;
+      stopDetection();
+    };
+  }, [user, loading, sessionId]);
 
   return (
     <View style={styles.container}>
@@ -103,11 +108,18 @@ export default function WorkoutScreen() {
           stopDetection();
           if (user && sessionId && exerciseId) {
             try {
+              console.log("ending session", sessionId);
               await supabase
                 .from("sessions")
                 .update({ ended_at: new Date().toISOString() })
                 .eq("id", sessionId);
 
+              console.log(
+                "inserting session_reps",
+                sessionId,
+                exerciseId,
+                repCount
+              );
               await supabase.from("session_reps").insert({
                 session_id: sessionId,
                 exercise_id: exerciseId,
@@ -115,6 +127,7 @@ export default function WorkoutScreen() {
               });
 
               const today = new Date().toISOString().split("T")[0];
+              console.log("today", today);
               const { data: existing } = await supabase
                 .from("daily_totals")
                 .select("id,totals")
@@ -122,6 +135,7 @@ export default function WorkoutScreen() {
                 .eq("date", today)
                 .maybeSingle();
 
+              console.log("existing", existing);
               const currentTotals: any = existing?.totals ?? {
                 pushup: 0,
                 squat: 0,
@@ -129,23 +143,35 @@ export default function WorkoutScreen() {
               currentTotals[exerciseId] =
                 (currentTotals[exerciseId] ?? 0) + repCount;
 
+              console.log("currentTotals", currentTotals);
               // compute met_goal from exercises
               const { data: exData } = await supabase
                 .from("exercises")
                 .select("exercise_id,daily_goal")
                 .eq("user_id", user.id)
                 .eq("enabled", true);
+              console.log("exData", exData);
               const metGoal = (exData ?? []).every(
                 (e) =>
                   (currentTotals[e.exercise_id] ?? 0) >= (e.daily_goal ?? 0)
               );
 
+              console.log("metGoal", metGoal);
               if (existing) {
                 await supabase
                   .from("daily_totals")
                   .update({ totals: currentTotals, met_goal: metGoal })
                   .eq("id", existing.id);
+                console.log("updated daily_totals", existing.id);
               } else {
+                console.log(
+                  "inserting daily_totals",
+                  user.id,
+                  today,
+                  currentTotals,
+                  metGoal,
+                  1
+                );
                 await supabase.from("daily_totals").insert({
                   user_id: user.id,
                   date: today,
@@ -154,7 +180,9 @@ export default function WorkoutScreen() {
                   streak: 1,
                 });
               }
-            } catch {}
+            } catch (error) {
+              console.error("error", error);
+            }
           }
           router.replace("/");
         }}
