@@ -11,6 +11,7 @@ export type DetectorType =
 export function usePoseDetector(det: DetectorType) {
   const [reps, setReps] = useState(0);
   const [confidence, setConfidence] = useState(0);
+  const [progress, setProgress] = useState(0);
   const pushRef = useRef<PushupDetector>();
   const squatRef = useRef<SquatDetector>();
 
@@ -29,11 +30,17 @@ export function usePoseDetector(det: DetectorType) {
       res = squatRef.current.step(pose);
     if (!res) return;
     setConfidence(res.confidence);
+    if (typeof (res as any).progress === "number")
+      setProgress((res as any).progress);
     if (res.didRep) {
       setReps(res.reps);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
   }
 
-  return { reps, confidence, onPose };
+  function addManual(delta: number) {
+    setReps((prev) => Math.max(0, prev + delta));
+  }
+
+  return { reps, confidence, progress, onPose, addManual };
 }

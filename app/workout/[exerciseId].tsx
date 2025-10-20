@@ -1,5 +1,11 @@
-import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
+import React, { useState, useEffect, useMemo } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Platform,
+} from "react-native";
 import { useMotionDetector } from "@/hooks/useMotionDetector";
 import Button from "@/components/ui/Button";
 import { router, useLocalSearchParams } from "expo-router";
@@ -7,6 +13,10 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import * as Haptics from "expo-haptics";
 import ConfettiCannon from "react-native-confetti-cannon";
+import Constants from "expo-constants";
+import * as Device from "expo-device";
+import { usePoseDetector } from "@/hooks/usePoseDetector";
+import { usePoseFrame } from "@/hooks/usePoseFrame";
 
 export default function WorkoutScreen() {
   const { exerciseId } = useLocalSearchParams<{
@@ -15,41 +25,105 @@ export default function WorkoutScreen() {
   const [repCount, setRepCount] = useState(0);
   const { user, loading } = useAuth();
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const isExpoGo = Constants.appOwnership === "expo";
+  const canUseCamera = true;
 
   const { isActive, startDetection, stopDetection } = useMotionDetector({
     exerciseType: exerciseId ?? "pushup",
     onRepDetected: () => setRepCount((p) => p + 1),
   });
 
+  // Camera pose detector
+  const detector = useMemo(() => {
+    if (exerciseId === "squat") return { type: "squat" } as const;
+    return { type: "pushup" as const, mode: "ground" as const };
+  }, [exerciseId]);
+  const {
+    reps: camReps,
+    confidence,
+    progress,
+    onPose,
+    addManual,
+  } = usePoseDetector(detector);
+  const [useCameraMode] = useState<boolean>(canUseCamera);
+  const [vc, setVc] = useState<any>(null);
+  const [authorized, setAuthorized] = useState<boolean | null>(null);
+  const devices = vc?.useCameraDevices ? vc.useCameraDevices() : undefined;
+  const device = devices?.front ?? devices?.back;
+  const frameProcessor = usePoseFrame(onPose);
+
   useEffect(() => {
     if (loading || !user || sessionId) return;
-    let isActiveMounted = true;
+    let mounted = true;
     (async () => {
       const { data, error } = await supabase
         .from("sessions")
-        .insert({ user_id: user.id, mode: "motion" })
+        .insert({ user_id: user.id, mode: useCameraMode ? "camera" : "motion" })
         .select()
         .single();
-      if (!error && data && isActiveMounted) {
+      if (!error && data && mounted) {
         setSessionId(data.id);
-        startDetection();
+        if (!useCameraMode) startDetection();
       }
     })();
     return () => {
-      isActiveMounted = false;
-      stopDetection();
+      mounted = false;
+      if (!useCameraMode) stopDetection();
     };
-  }, [user, loading, sessionId]);
+  }, [user, loading, sessionId, useCameraMode]);
+
+  // Load VisionCamera only in dev client, request permission
+  useEffect(() => {
+    if (!useCameraMode || isExpoGo) return;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const mod = require("react-native-vision-camera");
+      setVc(mod);
+      (async () => {
+        if (mod?.Camera) {
+          const status = await mod.Camera.requestCameraPermission();
+          setAuthorized(status === "granted");
+        }
+      })();
+    } catch {}
+  }, [useCameraMode, isExpoGo]);
 
   return (
     <View style={styles.container}>
+      {useCameraMode && vc?.Camera && device && authorized ? (
+        <vc.Camera
+          style={StyleSheet.absoluteFill}
+          device={device}
+          isActive
+          frameProcessor={frameProcessor}
+          frameProcessorFps={24}
+        />
+      ) : null}
       {/* Confetti when goal hit */}
-      {repCount > 0 && repCount % 10 === 0 && (
+      {(() => {
+        const n = useCameraMode ? camReps : repCount;
+        return n > 0 && n % 10 === 0;
+      })() && (
         <ConfettiCannon count={120} origin={{ x: 0, y: 0 }} fadeOut autoStart />
       )}
       <Text style={styles.title}>{exerciseId?.toUpperCase()}</Text>
-      <Text style={styles.counter}>{repCount}</Text>
-      <Text style={styles.caption}>{isActive ? "Listening…" : "Paused"}</Text>
+      <Text style={styles.counter}>{useCameraMode ? camReps : repCount}</Text>
+      <Text style={styles.caption}>
+        {(() => {
+          if (useCameraMode) {
+            return confidence > 0.5 ? "Tracking…" : "Finding…";
+          }
+          return isActive ? "Listening…" : "Paused";
+        })()}
+      </Text>
+      {useCameraMode && (
+        <View style={{ position: "absolute", top: 20, right: 20 }}>
+          {/* subtle mini progress ring and reps */}
+          <View style={{ opacity: 0.9 }}>
+            {/* reuse overlay component for consistency */}
+          </View>
+        </View>
+      )}
 
       {/* Subtle manual correction controls (always available) */}
       <View style={{ height: 20 }} />
@@ -64,7 +138,8 @@ export default function WorkoutScreen() {
           ]}
           onPress={async () => {
             await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            setRepCount((p) => Math.max(0, p - 1));
+            if (useCameraMode) addManual(-1);
+            else setRepCount((p) => Math.max(0, p - 1));
           }}
         >
           <Text style={styles.circleText}>-1</Text>
@@ -73,7 +148,8 @@ export default function WorkoutScreen() {
           style={[styles.circleBtnLarge, { backgroundColor: "#20e5e5" }]}
           onPress={async () => {
             await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-            setRepCount((p) => p + 1);
+            if (useCameraMode) addManual(1);
+            else setRepCount((p) => p + 1);
           }}
         >
           <Text style={[styles.circleTextLarge, { color: "#06121a" }]}>+1</Text>
@@ -88,30 +164,29 @@ export default function WorkoutScreen() {
           ]}
           onPress={async () => {
             await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            setRepCount((p) => p + 5);
+            if (useCameraMode) addManual(5);
+            else setRepCount((p) => p + 5);
           }}
         >
           <Text style={styles.circleText}>+5</Text>
         </TouchableOpacity>
       </View>
 
-      <View style={{ height: 16 }} />
-      <Button
-        title={isActive ? "Pause Auto" : "Resume Auto"}
-        variant="outline"
-        onPress={() => (isActive ? stopDetection() : startDetection())}
-      />
-      <View style={{ height: 12 }} />
-      <Button
-        title="Use Camera"
-        variant="outline"
-        onPress={() => router.push(`/workout/camera/${exerciseId}`)}
-      />
+      {!useCameraMode && (
+        <>
+          <View style={{ height: 16 }} />
+          <Button
+            title={isActive ? "Pause Auto" : "Resume Auto"}
+            variant="outline"
+            onPress={() => (isActive ? stopDetection() : startDetection())}
+          />
+        </>
+      )}
       <View style={{ height: 12 }} />
       <Button
         title="End Workout"
         onPress={async () => {
-          stopDetection();
+          if (!useCameraMode) stopDetection();
           if (user && sessionId && exerciseId) {
             try {
               console.log("ending session", sessionId);
@@ -129,7 +204,7 @@ export default function WorkoutScreen() {
               await supabase.from("session_reps").insert({
                 session_id: sessionId,
                 exercise_id: exerciseId,
-                count: repCount,
+                count: useCameraMode ? camReps : repCount,
               });
 
               const today = new Date().toISOString().split("T")[0];
@@ -147,7 +222,8 @@ export default function WorkoutScreen() {
                 squat: 0,
               };
               currentTotals[exerciseId] =
-                (currentTotals[exerciseId] ?? 0) + repCount;
+                (currentTotals[exerciseId] ?? 0) +
+                (useCameraMode ? camReps : repCount);
 
               console.log("currentTotals", currentTotals);
               // compute met_goal from exercises
