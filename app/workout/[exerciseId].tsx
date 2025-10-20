@@ -103,6 +103,12 @@ export default function WorkoutScreen() {
       />
       <View style={{ height: 12 }} />
       <Button
+        title="Use Camera"
+        variant="outline"
+        onPress={() => router.push(`/workout/camera/${exerciseId}`)}
+      />
+      <View style={{ height: 12 }} />
+      <Button
         title="End Workout"
         onPress={async () => {
           stopDetection();

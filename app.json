@@ -15,13 +15,17 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.nickbrough.streak-app"
+      "bundleIdentifier": "com.nickbrough.streak-app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Streak uses the camera to detect your exercise reps."
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
+      "permissions": ["android.permission.CAMERA"],
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
     },
@@ -36,7 +40,8 @@
         {
           "motionPermission": "Allow Streak to use motion sensors to count your reps"
         }
-      ]
+      ],
+      "react-native-vision-camera"
     ]
   }
 }
