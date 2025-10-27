@@ -10,6 +10,16 @@ export default function StreakDisplay({
   currentStreak,
 }: StreakDisplayProps) {
   const unit = currentStreak === 1 ? "day" : "days";
+  const dayInitials = ["S", "M", "T", "W", "T", "F", "S"];
+  const computeLabelForIndex = (index: number) => {
+    // index 6 is today, 0 is 6 days ago
+    const today = new Date();
+    const daysAgo = 6 - index;
+    const d = new Date(today);
+    d.setDate(today.getDate() - daysAgo);
+    const w = d.getDay();
+    return dayInitials[w];
+  };
   return (
     <View>
       <Text style={styles.label}>Current Streak</Text>
@@ -19,12 +29,20 @@ export default function StreakDisplay({
       </View>
       <Text style={styles.subLabel}>7 day challenge</Text>
       <View style={styles.rowDots}>
-        {days.map((d, i) => (
-          <View
-            key={i}
-            style={[styles.dot, d ? styles.dotOn : styles.dotOff]}
-          />
-        ))}
+        {days.map((d, i) => {
+          const today = new Date();
+          const daysAgo = 6 - i;
+          const date = new Date(today);
+          date.setDate(today.getDate() - daysAgo);
+          const dateKey = date.toISOString().split("T")[0];
+          const label = computeLabelForIndex(i);
+          return (
+            <View key={dateKey} style={styles.dotContainer}>
+              <View style={[styles.dot, d ? styles.dotOn : styles.dotOff]} />
+              <Text style={styles.dayLabel}>{label}</Text>
+            </View>
+          );
+        })}
       </View>
     </View>
   );
@@ -46,7 +64,9 @@ const styles = StyleSheet.create({
   },
   streakUnit: { color: "#94a3b8", fontSize: 14, marginBottom: 6 },
   rowDots: { flexDirection: "row", gap: 10 },
+  dotContainer: { alignItems: "center", gap: 4 },
   dot: { width: 10, height: 10, borderRadius: 5 },
   dotOn: { backgroundColor: "#20e5e5" },
   dotOff: { backgroundColor: "#1f2a35" },
+  dayLabel: { color: "#64748b", fontSize: 10 },
 });

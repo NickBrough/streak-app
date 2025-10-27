@@ -1,12 +1,5 @@
 import React, { useEffect, useState } from "react";
-import {
-  View,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  Dimensions,
-} from "react-native";
+import { View, StyleSheet, Text, TouchableOpacity } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Screen from "@/components/ui/Screen";
 import Button from "@/components/ui/Button";
@@ -120,11 +113,25 @@ export default function HomeScreen() {
           .select("met_goal,date")
           .eq("user_id", user.id)
           .order("date", { ascending: false })
-          .limit(7);
-        const completed = new Array(7).fill(false);
-        weekData?.forEach((day, idx) => {
-          if (day.met_goal) completed[6 - idx] = true;
+          .limit(14); // fetch a bit more to be safe
+
+        // Map of date => met_goal for quick lookup
+        const metByDate: Record<string, boolean> = {};
+        for (const d of weekData ?? []) {
+          metByDate[d.date] = !!d.met_goal;
+        }
+
+        // Build exactly last 7 calendar days from 6 days ago up to today
+        const todayDate = new Date();
+        const toIsoDate = (dt: Date) => dt.toISOString().split("T")[0];
+        const completed = new Array(7).fill(false).map((_, i) => {
+          const daysAgo = 6 - i; // index 6 = today, 0 = 6 days ago
+          const d = new Date(todayDate);
+          d.setDate(todayDate.getDate() - daysAgo);
+          const key = toIsoDate(d);
+          return !!metByDate[key];
         });
+
         setLast7Days(completed);
       } catch {}
     })();
