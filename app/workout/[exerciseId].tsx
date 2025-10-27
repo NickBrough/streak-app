@@ -1,11 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  Platform,
-} from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, Alert } from "react-native";
 import { useMotionDetector } from "@/hooks/useMotionDetector";
 import Button from "@/components/ui/Button";
 import { router, useLocalSearchParams } from "expo-router";
@@ -14,7 +8,6 @@ import { useAuth } from "@/hooks/useAuth";
 import * as Haptics from "expo-haptics";
 import ConfettiCannon from "react-native-confetti-cannon";
 import Constants from "expo-constants";
-import * as Device from "expo-device";
 import { usePoseDetector } from "@/hooks/usePoseDetector";
 import { usePoseFrame } from "@/hooks/usePoseFrame";
 
@@ -41,15 +34,14 @@ export default function WorkoutScreen() {
   const {
     reps: camReps,
     confidence,
-    progress,
     onPose,
     addManual,
   } = usePoseDetector(detector);
   const [useCameraMode] = useState<boolean>(canUseCamera);
   const [vc, setVc] = useState<any>(null);
   const [authorized, setAuthorized] = useState<boolean | null>(null);
-  const devices = vc?.useCameraDevices ? vc.useCameraDevices() : undefined;
-  const device = devices?.front ?? devices?.back;
+  const [cameraDevice, setCameraDevice] = useState<any>(null);
+  const [cameraError, setCameraError] = useState<string | null>(null);
   const frameProcessor = usePoseFrame(onPose);
 
   useEffect(() => {
@@ -72,28 +64,64 @@ export default function WorkoutScreen() {
     };
   }, [user, loading, sessionId, useCameraMode]);
 
-  // Load VisionCamera only in dev client, request permission
+  // Load VisionCamera (not on Expo Go), request permission, and resolve a device
   useEffect(() => {
-    if (!useCameraMode || isExpoGo) return;
+    if (!useCameraMode) return;
+    if (isExpoGo) {
+      setCameraError("Camera mode not allowed on your device");
+      return;
+    }
     try {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       const mod = require("react-native-vision-camera");
       setVc(mod);
       (async () => {
-        if (mod?.Camera) {
-          const status = await mod.Camera.requestCameraPermission();
-          setAuthorized(status === "granted");
+        try {
+          if (mod?.Camera) {
+            const status = await mod.Camera.requestCameraPermission();
+            const granted = status === "granted";
+            setAuthorized(granted);
+            if (granted) {
+              const list = await mod.Camera.getAvailableCameraDevices();
+              const chosen =
+                list?.find((d: any) => d.position === "front") ??
+                list?.find((d: any) => d.position === "back") ??
+                null;
+              if (chosen) {
+                setCameraDevice(chosen);
+              } else {
+                setCameraError("Camera mode not allowed on your device");
+              }
+            } else {
+              setCameraError("Camera mode not allowed on your device");
+              return;
+            }
+          }
+        } catch {
+          setCameraError("Camera mode not allowed on your device");
         }
       })();
-    } catch {}
+    } catch {
+      setCameraError("Camera mode not allowed on your device");
+    }
   }, [useCameraMode, isExpoGo]);
+
+  // Show popup when camera error occurs
+  useEffect(() => {
+    if (!cameraError) return;
+    Alert.alert("Camera unavailable", cameraError, [{ text: "OK" }]);
+  }, [cameraError]);
 
   return (
     <View style={styles.container}>
-      {useCameraMode && vc?.Camera && device && authorized ? (
+      {useCameraMode &&
+      vc?.Camera &&
+      cameraDevice &&
+      authorized &&
+      !cameraError ? (
         <vc.Camera
           style={StyleSheet.absoluteFill}
-          device={device}
+          device={cameraDevice}
           isActive
           frameProcessor={frameProcessor}
           frameProcessorFps={24}
