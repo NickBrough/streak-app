@@ -1,5 +1,4 @@
-import { useCallback } from "react";
-import { useFrameProcessor } from "react-native-vision-camera";
+import { useCallback, useMemo } from "react";
 import { runOnJS } from "react-native-reanimated";
 import { Pose } from "@/lib/camera/pose";
 
@@ -10,24 +9,22 @@ declare const global: any;
 export function usePoseFrame(onPose: (pose: Pose) => void) {
   const onPoseJS = useCallback((pose: Pose) => onPose(pose), [onPose]);
 
-  const frameProcessor = useFrameProcessor(
-    (frame) => {
+  // Provide a stable worklet that VisionCamera can call when available.
+  // This avoids importing VisionCamera hooks so Expo Go doesn't break.
+  const frameProcessor = useMemo(() => {
+    return (frame: unknown) => {
       "worklet";
-      // If a native plugin is available, call it here.
-      // Expected shape: global.__pose?.detect(frame) -> { landmarks: { name: {x,y,score} } }
+      // Expected native plugin shape: global.__pose?.detect(frame)
       // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-      const detector = global && global.__pose && global.__pose.detect;
-      if (detector) {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-        const result = detector(frame);
-        if (result) {
-          // @ts-expect-error runOnJS is only available in worklets
-          runOnJS(onPoseJS)(result as Pose);
-        }
+      const detector = global?.__pose?.detect;
+      if (!detector) return;
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+      const result = detector(frame);
+      if (result) {
+        runOnJS(onPoseJS)(result as Pose);
       }
-    },
-    [onPoseJS]
-  );
+    };
+  }, [onPoseJS]);
 
-  return frameProcessor;
+  return frameProcessor as unknown as (frame: unknown) => void;
 }
