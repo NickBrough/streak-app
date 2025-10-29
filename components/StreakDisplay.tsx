@@ -1,5 +1,6 @@
 import { View, Text, StyleSheet } from "react-native";
 import React from "react";
+import { toLocalDayUtcKey } from "@/lib/date";
 interface StreakDisplayProps {
   days: boolean[];
   currentStreak: number;
@@ -34,7 +35,7 @@ export default function StreakDisplay({
           const daysAgo = 6 - i;
           const date = new Date(today);
           date.setDate(today.getDate() - daysAgo);
-          const dateKey = date.toISOString().split("T")[0];
+          const dateKey = toLocalDayUtcKey(date);
           const label = computeLabelForIndex(i);
           return (
             <View key={dateKey} style={styles.dotContainer}>

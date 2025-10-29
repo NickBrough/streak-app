@@ -17,6 +17,7 @@ import Animated, {
 import * as Haptics from "expo-haptics";
 import ConfettiCannon from "react-native-confetti-cannon";
 import Avatar from "@/components/ui/Avatar";
+import { toLocalDayUtcKey } from "@/lib/date";
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
@@ -92,7 +93,7 @@ export default function HomeScreen() {
         }));
         setExercises(mapped);
 
-        const today = new Date().toISOString().split("T")[0];
+        const today = toLocalDayUtcKey();
         const { data: todayData } = await supabase
           .from("daily_totals")
           .select("totals,streak,met_goal")
@@ -123,12 +124,12 @@ export default function HomeScreen() {
 
         // Build exactly last 7 calendar days from 6 days ago up to today
         const todayDate = new Date();
-        const toIsoDate = (dt: Date) => dt.toISOString().split("T")[0];
+        const toDateKey = (dt: Date) => toLocalDayUtcKey(dt);
         const completed = new Array(7).fill(false).map((_, i) => {
           const daysAgo = 6 - i; // index 6 = today, 0 = 6 days ago
           const d = new Date(todayDate);
           d.setDate(todayDate.getDate() - daysAgo);
-          const key = toIsoDate(d);
+          const key = toDateKey(d);
           return !!metByDate[key];
         });
 
@@ -163,6 +164,7 @@ export default function HomeScreen() {
       <View style={styles.cardGlass}>
         {exercises.map((ex) => {
           const cur = totals[ex.exercise_id] ?? 0;
+          console.log("cur", cur, ex.goal, ex.exercise_id);
           const complete = cur >= ex.goal;
           const anyIncompleteExists = exercises.some(
             (e) => (totals[e.exercise_id] ?? 0) < e.goal

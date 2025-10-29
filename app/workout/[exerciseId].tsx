@@ -10,6 +10,7 @@ import ConfettiCannon from "react-native-confetti-cannon";
 import Constants from "expo-constants";
 import { usePoseDetector } from "@/hooks/usePoseDetector";
 import { usePoseFrame } from "@/hooks/usePoseFrame";
+import { toLocalDayUtcKey } from "@/lib/date";
 
 export default function WorkoutScreen() {
   const { exerciseId } = useLocalSearchParams<{
@@ -235,7 +236,7 @@ export default function WorkoutScreen() {
                 count: useCameraMode ? camReps : repCount,
               });
 
-              const today = new Date().toISOString().split("T")[0];
+              const today = toLocalDayUtcKey();
               console.log("today", today);
               const { data: existing } = await supabase
                 .from("daily_totals")
