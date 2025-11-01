@@ -131,10 +131,19 @@ export default function WorkoutScreen() {
       {/* Confetti when goal hit */}
       {(() => {
         const n = useCameraMode ? camReps : repCount;
-        return n > 0 && n % 10 === 0;
-      })() && (
-        <ConfettiCannon count={120} origin={{ x: 0, y: 0 }} fadeOut autoStart />
-      )}
+        if (n > 0 && n % 10 === 0) {
+          const confettiCount = Math.max(50, Math.min(500, n * 5));
+          return (
+            <ConfettiCannon
+              count={confettiCount}
+              origin={{ x: 0, y: 0 }}
+              fadeOut
+              autoStart
+            />
+          );
+        }
+        return null;
+      })()}
       <Text style={styles.title}>{exerciseId?.toUpperCase()}</Text>
       <Text style={styles.counter}>{useCameraMode ? camReps : repCount}</Text>
       <Text style={styles.caption}>

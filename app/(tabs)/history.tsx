@@ -196,12 +196,14 @@ function isYesterday(dateKey: string): boolean {
 }
 
 function formatWeekday(dateKey: string): string {
-  const d = new Date(dateKey + "T00:00:00Z");
+  const [y, m, dNum] = dateKey.split("-").map(Number);
+  const d = new Date(y, (m ?? 1) - 1, dNum ?? 1);
   return d.toLocaleDateString(undefined, { weekday: "short" });
 }
 
 function formatFullDate(dateKey: string): string {
-  const d = new Date(dateKey + "T00:00:00Z");
+  const [y, m, dNum] = dateKey.split("-").map(Number);
+  const d = new Date(y, (m ?? 1) - 1, dNum ?? 1);
   return d.toLocaleDateString(undefined, {
     month: "short",
     day: "numeric",
@@ -210,7 +212,8 @@ function formatFullDate(dateKey: string): string {
 }
 
 function formatMonthTitle(dateKey: string): string {
-  const d = new Date(dateKey + "T00:00:00Z");
+  const [y, m, dNum] = dateKey.split("-").map(Number);
+  const d = new Date(y, (m ?? 1) - 1, dNum ?? 1);
   return d.toLocaleDateString(undefined, { month: "long", year: "numeric" });
 }
 
