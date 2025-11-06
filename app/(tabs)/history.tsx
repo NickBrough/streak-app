@@ -58,19 +58,20 @@ export default function HistoryScreen() {
   }, [last30Days]);
 
   const sections: HistorySection[] = useMemo(() => {
-    const byMonth = new Map<string, DayRec[]>();
+    // Group by stable year-month key (YYYY-MM) derived from the ISO date string
+    const byYm = new Map<string, DayRec[]>();
     for (const d of historyDays) {
-      const title = formatMonthTitle(d.date);
-      const arr = byMonth.get(title) ?? [];
+      const ym = d.date.slice(0, 7);
+      const arr = byYm.get(ym) ?? [];
       arr.push(d);
-      byMonth.set(title, arr);
+      byYm.set(ym, arr);
     }
-    // Preserve month order based on latest date first
-    const titles = Array.from(byMonth.keys());
-    titles.sort((a, b) => (monthTitleToKey(a) < monthTitleToKey(b) ? 1 : -1));
-    return titles.map((t) => ({
-      title: t,
-      data: (byMonth.get(t) ?? []).sort((a, b) => (a.date < b.date ? 1 : -1)),
+    // Sort months descending (newest first) by the YYYY-MM key
+    const yms = Array.from(byYm.keys());
+    yms.sort((a, b) => (a < b ? 1 : -1));
+    return yms.map((ym) => ({
+      title: formatMonthTitle(`${ym}-01`),
+      data: (byYm.get(ym) ?? []).sort((a, b) => (a.date < b.date ? 1 : -1)),
     }));
   }, [historyDays]);
 
@@ -217,13 +218,7 @@ function formatMonthTitle(dateKey: string): string {
   return d.toLocaleDateString(undefined, { month: "long", year: "numeric" });
 }
 
-function monthTitleToKey(title: string): string {
-  // Convert "October 2025" -> sortable key "2025-10"
-  const d = new Date(title);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  return `${y}-${m}`;
-}
+// Removed fragile monthTitleToKey parsing; use stable YYYY-MM keys instead
 
 const styles = StyleSheet.create({
   container: { padding: 0 },
