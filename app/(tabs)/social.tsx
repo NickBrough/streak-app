@@ -166,7 +166,7 @@ export default function SocialScreen() {
   }, [user, scope, mode]);
 
   return (
-    <Screen scroll contentStyle={styles.container}>
+    <Screen contentStyle={styles.container}>
       <Text style={styles.heading}>Leaderboard</Text>
       <View style={styles.segment}>
         <SegmentButton
@@ -195,6 +195,7 @@ export default function SocialScreen() {
       </View>
 
       <FlatList
+        style={{ flex: 1 }}
         data={entries}
         keyExtractor={(e) => e.userId}
         contentContainerStyle={{ gap: 10, paddingBottom: 120 }}

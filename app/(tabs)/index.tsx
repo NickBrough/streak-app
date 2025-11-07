@@ -114,7 +114,7 @@ export default function HomeScreen() {
           .select("met_goal,date")
           .eq("user_id", user.id)
           .order("date", { ascending: false })
-          .limit(14); // fetch a bit more to be safe
+          .limit(365); // cover long streaks
 
         // Map of date => met_goal for quick lookup
         const metByDate: Record<string, boolean> = {};
@@ -132,6 +132,20 @@ export default function HomeScreen() {
           const key = toDateKey(d);
           return !!metByDate[key];
         });
+
+        // Compute current streak as consecutive met_goal days from today backwards
+        let computedStreak = 0;
+        for (let i = 0; i < 365; i++) {
+          const d = new Date(todayDate);
+          d.setDate(todayDate.getDate() - i);
+          const key = toDateKey(d);
+          if (metByDate[key]) {
+            computedStreak += 1;
+          } else {
+            break;
+          }
+        }
+        setStreak(computedStreak);
 
         setLast7Days(completed);
       } catch {}
