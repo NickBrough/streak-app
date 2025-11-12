@@ -169,7 +169,13 @@ export default function HomeScreen() {
           <Text style={styles.greetLabel}>Today</Text>
           <Text style={styles.heading}>Keep your streak alive</Text>
         </View>
-        <Avatar name={user?.email ?? ""} size={36} />
+        <TouchableOpacity
+          onPress={() => router.push("/(tabs)/settings")}
+          activeOpacity={0.7}
+          style={styles.avatarChip}
+        >
+          <Avatar name={user?.email ?? ""} size={36} />
+        </TouchableOpacity>
       </View>
       <View style={styles.cardGlow}>
         <StreakDisplay days={last7Days} currentStreak={streak} />

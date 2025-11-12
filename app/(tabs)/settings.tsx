@@ -28,7 +28,7 @@ export default function SettingsScreen() {
 
       const { data: ex } = await supabase
         .from("exercises")
-        .select("exercise_id,daily_goal")
+        .select("exercise_id,daily_goal,enabled")
         .eq("user_id", user.id);
       ex?.forEach((e: any) => {
         if (e.exercise_id === "pushup") {
@@ -88,21 +88,31 @@ export default function SettingsScreen() {
           if (!user) return;
           setSaving(true);
           try {
-            await supabase.from("profiles").upsert({ id: user.id, handle });
-            await supabase.from("exercises").upsert([
-              {
-                user_id: user.id,
-                exercise_id: "pushup",
-                daily_goal: Number(pushupGoal) || 0,
-                enabled: pushupEnabled,
-              },
-              {
-                user_id: user.id,
-                exercise_id: "squat",
-                daily_goal: Number(squatGoal) || 0,
-                enabled: squatEnabled,
-              },
-            ]);
+            await supabase
+              .from("profiles")
+              .upsert({ id: user.id, handle })
+              .select()
+              .single();
+            await supabase
+              .from("exercises")
+              .upsert(
+                [
+                  {
+                    user_id: user.id,
+                    exercise_id: "pushup",
+                    daily_goal: Number(pushupGoal) || 0,
+                    enabled: pushupEnabled,
+                  },
+                  {
+                    user_id: user.id,
+                    exercise_id: "squat",
+                    daily_goal: Number(squatGoal) || 0,
+                    enabled: squatEnabled,
+                  },
+                ],
+                { onConflict: "user_id,exercise_id" }
+              )
+              .select();
           } finally {
             setSaving(false);
           }

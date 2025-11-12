@@ -6,6 +6,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
+  ScrollView,
 } from "react-native";
 import Screen from "@/components/ui/Screen";
 import LeaderboardRow, {
@@ -15,17 +16,27 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import { toLocalDayUtcKey } from "@/lib/date";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import AddFriendsSheet from "@/components/social/AddFriendsSheet";
+import { useLocalSearchParams } from "expo-router";
+import { Plus, Calendar, Trophy } from "lucide-react-native";
 
 export default function SocialScreen() {
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const [mode, setMode] = useState<"reps" | "days">("reps");
+  const [period, setPeriod] = useState<"week" | "all">("week");
   const [scope, setScope] = useState<"global" | "friends">("global");
   const [supportsFollows, setSupportsFollows] = useState<boolean>(true);
   const [selected, setSelected] = useState<LeaderboardEntry | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
+  const [showAddFriends, setShowAddFriends] = useState(false);
+  const params = useLocalSearchParams<{
+    addfriend?: string;
+    inviter?: string;
+    handle?: string;
+  }>();
 
   useEffect(() => {
     let mounted = true;
@@ -33,13 +44,12 @@ export default function SocialScreen() {
       setLoading(true);
       setError(null);
       try {
-        // Detect follows support (table may not exist yet)
+        // Detect friends support (table may not exist yet)
         if (user) {
           try {
             await supabase
-              .from("follows")
-              .select("followee_id", { count: "exact", head: true })
-              .eq("follower_id", user.id)
+              .from("friendships")
+              .select("user_id1", { count: "exact", head: true })
               .limit(1);
             if (mounted) setSupportsFollows(true);
           } catch {
@@ -54,14 +64,15 @@ export default function SocialScreen() {
           last7.push(toLocalDayUtcKey(d));
         }
 
-        const { data, error: err } = await supabase
+        // Always build a weekly snapshot to drive candidate user set
+        const { data: weekRows, error: weekErr } = await supabase
           .from("daily_totals")
           .select("user_id,date,totals,met_goal,streak")
           .in("date", last7);
-        if (err) throw err;
+        if (weekErr) throw weekErr;
 
         const byUser = new Map<string, LeaderboardEntry>();
-        for (const row of data ?? []) {
+        for (const row of weekRows ?? []) {
           const uid = row.user_id as string;
           const date = row.date as string;
           const totals = (row.totals as any) ?? {};
@@ -99,24 +110,84 @@ export default function SocialScreen() {
         }
 
         let list = Array.from(byUser.values());
+        let candidateIds = new Set<string>(list.map((e) => e.userId));
         // Apply friends scope if requested and supported
         if (user && scope === "friends" && supportsFollows) {
           try {
-            const { data: fl } = await supabase
-              .from("follows")
-              .select("followee_id")
-              .eq("follower_id", user.id);
+            const { data: fr } = await supabase
+              .from("friendships")
+              .select("user_id1,user_id2")
+              .or(`user_id1.eq.${user.id},user_id2.eq.${user.id}`);
+            const friendIds = new Set<string>(
+              (fr ?? []).map((r: any) =>
+                r.user_id1 === user.id
+                  ? (r.user_id2 as string)
+                  : (r.user_id1 as string)
+              )
+            );
+            // Ensure friends appear even with no recent activity
+            for (const fid of Array.from(friendIds)) {
+              if (!byUser.has(fid)) {
+                byUser.set(fid, {
+                  userId: fid,
+                  handle: "",
+                  avatarUrl: null,
+                  weeklyReps: 0,
+                  daysMet: 0,
+                  streak: 0,
+                });
+              }
+              candidateIds.add(fid);
+            }
+            list = Array.from(byUser.values());
             const allowed = new Set<string>([
               user.id,
-              ...((fl ?? []).map(
-                (f: any) => f.followee_id as string
-              ) as string[]),
+              ...Array.from(friendIds),
             ]);
             list = list.filter((e) => allowed.has(e.userId));
           } catch {
             // if query fails, fall back to global
           }
         }
+
+        // If viewing all-time, aggregate over all historical rows for candidate users
+        if (period === "all" && candidateIds.size > 0) {
+          const ids = Array.from(candidateIds);
+          const { data: allRows } = await supabase
+            .from("daily_totals")
+            .select("user_id,date,totals,met_goal,streak")
+            .in("user_id", ids);
+          const agg = new Map<string, LeaderboardEntry>();
+          for (const row of allRows ?? []) {
+            const uid = row.user_id as string;
+            const date = row.date as string;
+            const totals = (row.totals as any) ?? {};
+            const push = Number(totals.pushup ?? 0) || 0;
+            const squat = Number(totals.squat ?? 0) || 0;
+            const reps = push + squat;
+            const prev = agg.get(uid) ?? {
+              userId: uid,
+              handle: "",
+              avatarUrl: null,
+              weeklyReps: 0,
+              daysMet: 0,
+              streak: 0,
+              lastActive: undefined,
+            };
+            prev.weeklyReps += reps; // reuse weeklyReps field to mean total reps in all-time mode
+            if (row.met_goal) prev.daysMet += 1;
+            if (!prev.lastActive || date > prev.lastActive) {
+              prev.lastActive = date;
+              prev.streak = Math.max(
+                prev.streak ?? 0,
+                Number(row.streak ?? 0) || 0
+              );
+            }
+            agg.set(uid, prev);
+          }
+          list = Array.from(agg.values());
+        }
+
         // Fetch profiles for user metadata
         if (list.length > 0) {
           const ids = list.map((e) => e.userId);
@@ -163,35 +234,90 @@ export default function SocialScreen() {
     return () => {
       mounted = false;
     };
-  }, [user, scope, mode]);
+  }, [user, scope, mode, period, showAddFriends]);
+
+  useEffect(() => {
+    if (params?.addfriend || params?.inviter || params?.handle) {
+      setShowAddFriends(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params?.addfriend, params?.inviter, params?.handle]);
 
   return (
     <Screen contentStyle={styles.container}>
-      <Text style={styles.heading}>Leaderboard</Text>
-      <View style={styles.segment}>
-        <SegmentButton
-          label="Reps"
-          active={mode === "reps"}
-          onPress={() => setMode("reps")}
-        />
-        <SegmentButton
-          label="Days Met"
-          active={mode === "days"}
-          onPress={() => setMode("days")}
-        />
+      <View style={styles.header}>
+        <Text style={styles.heading}>Leaderboard</Text>
+        <TouchableOpacity
+          onPress={() => setShowAddFriends(true)}
+          style={styles.iconBtn}
+          accessibilityLabel="Add friends"
+        >
+          <Plus color="#e6f0f2" size={18} />
+        </TouchableOpacity>
       </View>
 
-      <View style={[styles.segment, { marginTop: 4 }]}>
-        <SegmentButton
-          label="Global"
-          active={scope === "global"}
-          onPress={() => setScope("global")}
-        />
-        <SegmentButton
-          label={supportsFollows ? "Friends" : "Friends (soon)"}
-          active={scope === "friends"}
-          onPress={() => supportsFollows && setScope("friends")}
-        />
+      <View style={styles.filterRow}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterScrollContent}
+          style={styles.filterScroll}
+        >
+          <View style={[styles.segmentCompact, { marginRight: 8 }]}>
+            <CompactButton
+              label="Reps"
+              icon={
+                <Trophy
+                  color={mode === "reps" ? "#20e5e5" : "#94a3b8"}
+                  size={14}
+                />
+              }
+              active={mode === "reps"}
+              onPress={() => setMode("reps")}
+            />
+            <CompactButton
+              label="Days"
+              icon={null}
+              active={mode === "days"}
+              onPress={() => setMode("days")}
+            />
+          </View>
+          <View style={[styles.segmentCompact, { marginRight: 8 }]}>
+            <CompactButton
+              label="Weekly"
+              icon={
+                <Calendar
+                  color={period === "week" ? "#20e5e5" : "#94a3b8"}
+                  size={14}
+                />
+              }
+              active={period === "week"}
+              onPress={() => setPeriod("week")}
+            />
+            <CompactButton
+              label="All Time"
+              icon={null}
+              active={period === "all"}
+              onPress={() => setPeriod("all")}
+            />
+          </View>
+          <View
+            style={[styles.segmentCompact, { marginRight: 8, flexShrink: 0 }]}
+          >
+            <CompactButton
+              label={supportsFollows ? "Friends" : "Soon"}
+              icon={null}
+              active={scope === "friends"}
+              onPress={() => supportsFollows && setScope("friends")}
+            />
+            <CompactButton
+              label="Global"
+              icon={null}
+              active={scope === "global"}
+              onPress={() => setScope("global")}
+            />
+          </View>
+        </ScrollView>
       </View>
 
       <FlatList
@@ -252,6 +378,18 @@ export default function SocialScreen() {
           </View>
         </View>
       )}
+      {showAddFriends && (
+        <AddFriendsSheet
+          visible={showAddFriends}
+          onClose={() => setShowAddFriends(false)}
+          prefillUserId={
+            typeof params?.inviter === "string" ? params.inviter : undefined
+          }
+          prefillHandle={
+            typeof params?.handle === "string" ? params.handle : undefined
+          }
+        />
+      )}
     </Screen>
   );
 }
@@ -277,15 +415,66 @@ function SegmentButton({
   );
 }
 
+function CompactButton({
+  label,
+  active,
+  onPress,
+  icon,
+}: {
+  label: string;
+  active: boolean;
+  onPress: () => void;
+  icon: React.ReactNode | null;
+}) {
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      style={[styles.compactBtn, active && styles.compactBtnActive]}
+    >
+      {icon}
+      <Text style={[styles.compactText, active && styles.compactTextActive]}>
+        {label}
+      </Text>
+    </TouchableOpacity>
+  );
+}
+
 const styles = StyleSheet.create({
   container: { padding: 20 },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
   heading: {
     color: "#e6f0f2",
     fontSize: 22,
     fontWeight: "800",
     marginBottom: 10,
   },
+  iconBtn: {
+    width: 32,
+    height: 32,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
   empty: { color: "#94a3b8", textAlign: "center", marginTop: 16 },
+  filterRow: {
+    height: 34,
+    marginBottom: 8,
+  },
+  filterScrollContent: {
+    alignItems: "center",
+    paddingVertical: 0,
+  },
+  filterScroll: {
+    flexGrow: 0,
+  },
   segment: {
     flexDirection: "row",
     alignItems: "center",
@@ -293,6 +482,13 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 4,
     marginBottom: 12,
+  },
+  segmentCompact: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    borderRadius: 10,
+    padding: 2,
   },
   segmentBtn: {
     flex: 1,
@@ -304,6 +500,17 @@ const styles = StyleSheet.create({
   segmentBtnActive: { backgroundColor: "#0f1720" },
   segmentText: { color: "#94a3b8", fontWeight: "600" },
   segmentTextActive: { color: "#e6f0f2" },
+  compactBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 10,
+    height: 28,
+    borderRadius: 8,
+  },
+  compactBtnActive: { backgroundColor: "#0f1720" },
+  compactText: { color: "#94a3b8", fontWeight: "600", fontSize: 12 },
+  compactTextActive: { color: "#e6f0f2" },
   sheetOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(0,0,0,0.35)",
