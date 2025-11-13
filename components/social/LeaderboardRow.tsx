@@ -9,7 +9,7 @@ export type LeaderboardEntry = {
   weeklyReps: number;
   daysMet: number;
   streak: number;
-  lastActive?: string; // YYYY-MM-DD
+  lastActive?: string;
 };
 
 interface LeaderboardRowProps {

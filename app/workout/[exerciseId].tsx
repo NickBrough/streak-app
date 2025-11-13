@@ -1,5 +1,13 @@
-import React, { useState, useEffect, useMemo } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, Alert } from "react-native";
+import React, { useState, useEffect, useMemo, useRef } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Alert,
+  Animated,
+  Easing,
+} from "react-native";
 import { useMotionDetector } from "@/hooks/useMotionDetector";
 import Button from "@/components/ui/Button";
 import { router, useLocalSearchParams } from "expo-router";
@@ -11,6 +19,9 @@ import Constants from "expo-constants";
 import { usePoseDetector } from "@/hooks/usePoseDetector";
 import { usePoseFrame } from "@/hooks/usePoseFrame";
 import { toLocalDayUtcKey } from "@/lib/date";
+import Svg, { Circle, Defs, LinearGradient, Stop } from "react-native-svg";
+
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 export default function WorkoutScreen() {
   const { exerciseId } = useLocalSearchParams<{
@@ -21,6 +32,10 @@ export default function WorkoutScreen() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const isExpoGo = Constants.appOwnership === "expo";
   const canUseCamera = true;
+  const [dailyGoal, setDailyGoal] = useState<number | null>(null);
+  const [todayBaseCount, setTodayBaseCount] = useState<number>(0);
+  const [goalLoaded, setGoalLoaded] = useState(false);
+  const [goalCelebrated, setGoalCelebrated] = useState(false);
 
   const { isActive, startDetection, stopDetection } = useMotionDetector({
     exerciseType: exerciseId ?? "pushup",
@@ -32,18 +47,15 @@ export default function WorkoutScreen() {
     if (exerciseId === "squat") return { type: "squat" } as const;
     return { type: "pushup" as const, mode: "ground" as const };
   }, [exerciseId]);
-  const {
-    reps: camReps,
-    confidence,
-    onPose,
-    addManual,
-  } = usePoseDetector(detector);
+  const { reps: camReps, onPose, addManual } = usePoseDetector(detector);
   const [useCameraMode] = useState<boolean>(canUseCamera);
   const [vc, setVc] = useState<any>(null);
   const [authorized, setAuthorized] = useState<boolean | null>(null);
   const [cameraDevice, setCameraDevice] = useState<any>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const frameProcessor = usePoseFrame(onPose);
+  const glowPulse = useRef(new Animated.Value(0)).current;
+  const glowAnimRef = useRef<Animated.CompositeAnimation | null>(null);
 
   useEffect(() => {
     if (loading || !user || sessionId) return;
@@ -113,6 +125,98 @@ export default function WorkoutScreen() {
     Alert.alert("Camera unavailable", cameraError, [{ text: "OK" }]);
   }, [cameraError]);
 
+  // Load daily goal and today's base totals for this exercise
+  useEffect(() => {
+    if (loading || !user || !exerciseId) return;
+    let mounted = true;
+    (async () => {
+      try {
+        const { data: exRow } = await supabase
+          .from("exercises")
+          .select("daily_goal")
+          .eq("user_id", user.id)
+          .eq("exercise_id", exerciseId)
+          .eq("enabled", true)
+          .maybeSingle();
+        const defaultGoals: Record<"pushup" | "squat", number> = {
+          pushup: 30,
+          squat: 20,
+        };
+        const fallback = defaultGoals[exerciseId] ?? 25;
+        const goal = Math.max(0, exRow?.daily_goal ?? fallback);
+        const today = toLocalDayUtcKey();
+        const { data: totalsRow } = await supabase
+          .from("daily_totals")
+          .select("totals")
+          .eq("user_id", user.id)
+          .eq("date", today)
+          .maybeSingle();
+        const base = Math.max(0, totalsRow?.totals?.[exerciseId] ?? 0);
+        if (!mounted) return;
+        setDailyGoal(goal);
+        setTodayBaseCount(base);
+        setGoalLoaded(true);
+      } catch {
+        if (!mounted) return;
+        // Soft-fallbacks
+        setDailyGoal(exerciseId === "pushup" ? 30 : 20);
+        setTodayBaseCount(0);
+        setGoalLoaded(true);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [user, loading, exerciseId]);
+
+  const sessionReps = useCameraMode ? camReps : repCount;
+  const projectedTotal = todayBaseCount + sessionReps;
+  const progressToGoal =
+    dailyGoal && dailyGoal > 0
+      ? Math.max(0, Math.min(1, projectedTotal / dailyGoal))
+      : 0;
+  const goalMet =
+    goalLoaded && dailyGoal !== null && projectedTotal >= dailyGoal;
+  // Celebrate once when crossing the daily goal threshold
+  useEffect(() => {
+    if (!goalLoaded || goalCelebrated || !dailyGoal || dailyGoal <= 0) return;
+    if (projectedTotal >= dailyGoal) {
+      setGoalCelebrated(true);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+  }, [goalLoaded, dailyGoal, projectedTotal, goalCelebrated]);
+
+  // Subtle pulsing when goal is met
+  useEffect(() => {
+    if (goalMet) {
+      glowAnimRef.current?.stop?.();
+      glowPulse.setValue(0);
+      const a = Animated.loop(
+        Animated.sequence([
+          Animated.timing(glowPulse, {
+            toValue: 1,
+            duration: 1400,
+            easing: Easing.inOut(Easing.quad),
+            useNativeDriver: false,
+          }),
+          Animated.timing(glowPulse, {
+            toValue: 0,
+            duration: 1400,
+            easing: Easing.inOut(Easing.quad),
+            useNativeDriver: false,
+          }),
+        ])
+      );
+      glowAnimRef.current = a;
+      a.start();
+    } else {
+      glowAnimRef.current?.stop?.();
+      glowPulse.setValue(0);
+    }
+    return () => {
+      glowAnimRef.current?.stop?.();
+    };
+  }, [goalMet]);
   return (
     <View style={styles.container}>
       {useCameraMode &&
@@ -131,6 +235,16 @@ export default function WorkoutScreen() {
       {/* Confetti when goal hit */}
       {(() => {
         const n = useCameraMode ? camReps : repCount;
+        if (goalCelebrated) {
+          return (
+            <ConfettiCannon
+              count={300}
+              origin={{ x: 0, y: 0 }}
+              fadeOut
+              autoStart
+            />
+          );
+        }
         if (n > 0 && n % 10 === 0) {
           const confettiCount = Math.max(50, Math.min(500, n * 5));
           return (
@@ -145,23 +259,133 @@ export default function WorkoutScreen() {
         return null;
       })()}
       <Text style={styles.title}>{exerciseId?.toUpperCase()}</Text>
-      <Text style={styles.counter}>{useCameraMode ? camReps : repCount}</Text>
-      <Text style={styles.caption}>
-        {(() => {
-          if (useCameraMode) {
-            return confidence > 0.5 ? "Tracking…" : "Finding…";
-          }
-          return isActive ? "Listening…" : "Paused";
-        })()}
-      </Text>
-      {useCameraMode && (
-        <View style={{ position: "absolute", top: 20, right: 20 }}>
-          {/* subtle mini progress ring and reps */}
-          <View style={{ opacity: 0.9 }}>
-            {/* reuse overlay component for consistency */}
-          </View>
+      {/* Center counter with Revolut-style progress ring */}
+      <View style={styles.centerCounterWrap}>
+        {goalLoaded && dailyGoal !== null ? (
+          <Svg width={220} height={220}>
+            <Defs>
+              <LinearGradient id="goalGradMain" x1="0" y1="0" x2="1" y2="1">
+                <Stop offset="0%" stopColor="#20e5e5" stopOpacity="1" />
+                <Stop offset="100%" stopColor="#57ffa6" stopOpacity="1" />
+              </LinearGradient>
+              <LinearGradient id="fireGrad" x1="0" y1="0" x2="1" y2="1">
+                <Stop offset="0%" stopColor="#ff8a00" stopOpacity="1" />
+                <Stop offset="100%" stopColor="#ff3d81" stopOpacity="1" />
+              </LinearGradient>
+            </Defs>
+            {/* Base track */}
+            <Circle
+              cx={110}
+              cy={110}
+              r={94}
+              stroke="#0b1620"
+              strokeWidth={12}
+              fill="none"
+            />
+            {/* Soft aura for progress */}
+            {!goalMet && (
+              <Circle
+                cx={110}
+                cy={110}
+                r={94}
+                stroke="#20e5e5"
+                strokeOpacity={0.15}
+                strokeWidth={18}
+                strokeDasharray={`${
+                  2 * Math.PI * 94 * Math.max(0, Math.min(1, progressToGoal))
+                } ${2 * Math.PI * 94}`}
+                strokeLinecap="round"
+                rotation={-90}
+                originX={110}
+                originY={110}
+                fill="none"
+              />
+            )}
+            {/* Foreground progress */}
+            <Circle
+              cx={110}
+              cy={110}
+              r={94}
+              stroke={goalMet ? "url(#fireGrad)" : "url(#goalGradMain)"}
+              strokeWidth={12}
+              strokeDasharray={`${
+                2 * Math.PI * 94 * Math.max(0, Math.min(1, progressToGoal))
+              } ${2 * Math.PI * 94}`}
+              strokeLinecap="round"
+              rotation={-90}
+              originX={110}
+              originY={110}
+              fill="none"
+            />
+            {goalMet && (
+              <>
+                <AnimatedCircle
+                  cx={110}
+                  cy={110}
+                  r={94}
+                  stroke="url(#fireGrad)"
+                  strokeOpacity={
+                    glowPulse.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0.14, 0.26],
+                    }) as unknown as number
+                  }
+                  strokeWidth={
+                    glowPulse.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [24, 30],
+                    }) as unknown as number
+                  }
+                  fill="none"
+                />
+                <AnimatedCircle
+                  cx={110}
+                  cy={110}
+                  r={94}
+                  stroke="url(#fireGrad)"
+                  strokeOpacity={
+                    glowPulse.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0.1, 0.18],
+                    }) as unknown as number
+                  }
+                  strokeWidth={
+                    glowPulse.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [16, 22],
+                    }) as unknown as number
+                  }
+                  fill="none"
+                />
+              </>
+            )}
+          </Svg>
+        ) : null}
+        <View style={styles.centerLabel}>
+          <Text style={[styles.counter, goalMet && styles.counterOnFire]}>
+            {useCameraMode ? camReps : repCount}
+          </Text>
         </View>
-      )}
+        {goalMet && (
+          <Animated.View
+            style={[
+              styles.fireBadge,
+              {
+                transform: [
+                  {
+                    scale: glowPulse.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [1, 1.08],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
+            <Text style={styles.fireBadgeText}>🔥</Text>
+          </Animated.View>
+        )}
+      </View>
 
       {/* Subtle manual correction controls (always available) */}
       <View style={{ height: 20 }} />
@@ -233,12 +457,6 @@ export default function WorkoutScreen() {
                 .update({ ended_at: new Date().toISOString() })
                 .eq("id", sessionId);
 
-              console.log(
-                "inserting session_reps",
-                sessionId,
-                exerciseId,
-                repCount
-              );
               await supabase.from("session_reps").insert({
                 session_id: sessionId,
                 exercise_id: exerciseId,
@@ -263,20 +481,18 @@ export default function WorkoutScreen() {
                 (currentTotals[exerciseId] ?? 0) +
                 (useCameraMode ? camReps : repCount);
 
-              console.log("currentTotals", currentTotals);
               // compute met_goal from exercises
               const { data: exData } = await supabase
                 .from("exercises")
                 .select("exercise_id,daily_goal")
                 .eq("user_id", user.id)
                 .eq("enabled", true);
-              console.log("exData", exData);
+
               const metGoal = (exData ?? []).every(
                 (e) =>
                   (currentTotals[e.exercise_id] ?? 0) >= (e.daily_goal ?? 0)
               );
 
-              console.log("metGoal", metGoal);
               if (existing) {
                 await supabase
                   .from("daily_totals")
@@ -320,6 +536,23 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   title: { color: "#94a3b8", fontSize: 14, letterSpacing: 2 },
+  centerCounterWrap: {
+    width: 220,
+    height: 220,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 6,
+    marginBottom: 4,
+  },
+  centerLabel: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   counter: {
     color: "#e6f0f2",
     fontSize: 80,
@@ -327,7 +560,27 @@ const styles = StyleSheet.create({
     textShadowColor: "rgba(32,229,229,0.4)",
     textShadowRadius: 24,
   },
+  counterOnFire: {
+    textShadowColor: "rgba(255,122,0,0.6)",
+    textShadowRadius: 28,
+  },
   caption: { color: "#94a3b8", marginTop: 6 },
+  fireBadge: {
+    position: "absolute",
+    top: -6,
+    right: 8,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,138,0,0.14)",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255,255,255,0.08)",
+  },
+  fireBadgeText: {
+    fontSize: 18,
+  },
   segment: {
     flexDirection: "row",
     alignItems: "center",
