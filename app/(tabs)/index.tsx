@@ -177,6 +177,7 @@ export default function HomeScreen() {
           <Avatar name={user?.email ?? ""} size={36} />
         </TouchableOpacity>
       </View>
+      
       <View style={styles.cardGlow}>
         <StreakDisplay days={last7Days} currentStreak={streak} />
       </View>
@@ -283,6 +284,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 10,
   },
+  
   avatarChip: {
     width: 36,
     height: 36,

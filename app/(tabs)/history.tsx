@@ -5,6 +5,16 @@ import { useAuth } from "@/hooks/useAuth";
 import Svg, { Circle } from "react-native-svg";
 import Screen from "@/components/ui/Screen";
 import { toLocalDayUtcKey } from "@/lib/date";
+import {
+  bucketizeReps,
+  computeAdherence,
+  computeCurrentStreak,
+  computeLongestStreak,
+  computeTotals,
+  weekdayConsistency,
+} from "@/lib/stats";
+import StatTile from "@/components/stats/StatTile";
+import WeekdayBars from "@/components/stats/WeekdayBars";
 
 type DayRec = {
   date: string;
@@ -75,6 +85,37 @@ export default function HistoryScreen() {
     }));
   }, [historyDays]);
 
+  const heatmap = useMemo(() => bucketizeReps(historyDays, 30), [historyDays]);
+  const currentStreak = useMemo(
+    () => computeCurrentStreak(historyDays),
+    [historyDays]
+  );
+  const longestStreak = useMemo(
+    () => computeLongestStreak(historyDays),
+    [historyDays]
+  );
+  const adherence = useMemo(
+    () => computeAdherence(historyDays, 30),
+    [historyDays]
+  );
+  const totals30 = useMemo(() => computeTotals(historyDays, 30), [historyDays]);
+  const weekdayCounts = useMemo(
+    () => weekdayConsistency(historyDays, 12),
+    [historyDays]
+  );
+  const mostConsistentIdx = useMemo(() => {
+    let best = 0;
+    let idx = 0;
+    for (let i = 0; i < weekdayCounts.length; i++) {
+      if (weekdayCounts[i] > best) {
+        best = weekdayCounts[i];
+        idx = i;
+      }
+    }
+    return idx;
+  }, [weekdayCounts]);
+  const weekdayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
   return (
     <Screen contentStyle={styles.container}>
       <SectionList
@@ -85,22 +126,64 @@ export default function HistoryScreen() {
         ListHeaderComponent={
           <View>
             <Text style={styles.heading}>History</Text>
+            <View style={styles.tilesRow}>
+              <StatTile
+                title="Longest streak"
+                value={longestStreak}
+                sublabel="days"
+                style={{ flex: 1 }}
+              />
+              <StatTile
+                title="30‑day adherence"
+                value={`${adherence.percent}%`}
+                sublabel={`${adherence.daysMet}/${adherence.totalDays} days`}
+                style={{ flex: 1 }}
+              />
+              <StatTile
+                title="30‑day reps"
+                value={totals30.reps}
+                sublabel={`${totals30.pushup} push • ${totals30.squat} squat`}
+                style={{ flex: 1 }}
+              />
+            </View>
             <View style={styles.ringWrap}>
               <Ring value={weeklyStreak} max={7} />
               <Text style={styles.ringLabel}>{weeklyStreak}/7</Text>
               <Text style={styles.sub}>Weekly streak</Text>
             </View>
             <View style={styles.grid}>
-              {last30Days.map((d) => (
-                <View
-                  key={d.date}
-                  style={[
-                    styles.cell,
-                    d.met_goal ? styles.cellOn : styles.cellOff,
-                  ]}
-                />
-              ))}
+              {heatmap.map((d) => {
+                const bucket = d.bucket;
+                return (
+                  <View
+                    key={d.date}
+                    style={[
+                      styles.cell,
+                      bucket === 0
+                        ? styles.cellB0
+                        : bucket === 1
+                        ? styles.cellB1
+                        : bucket === 2
+                        ? styles.cellB2
+                        : styles.cellB3,
+                    ]}
+                  />
+                );
+              })}
             </View>
+            <View style={styles.legendRow}>
+              <Text style={styles.legendLabel}>Less</Text>
+              <View style={[styles.legendDot, styles.cellB0]} />
+              <View style={[styles.legendDot, styles.cellB1]} />
+              <View style={[styles.legendDot, styles.cellB2]} />
+              <View style={[styles.legendDot, styles.cellB3]} />
+              <Text style={styles.legendLabel}>More</Text>
+            </View>
+            <Text style={styles.sectionLead}>Consistency</Text>
+            <WeekdayBars counts={weekdayCounts} />
+            <Text style={styles.sub}>
+              Most consistent: {weekdayNames[mostConsistentIdx]}
+            </Text>
             <Text style={styles.sectionLead}>Activity</Text>
           </View>
         }
@@ -234,6 +317,14 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginBottom: 16,
   },
+  tilesRow: {
+    flexDirection: "row",
+    alignItems: "stretch",
+    justifyContent: "space-between",
+    gap: 10,
+    flexWrap: "wrap",
+    marginBottom: 12,
+  },
   ringLabel: {
     position: "absolute",
     color: "#e6f0f2",
@@ -242,8 +333,19 @@ const styles = StyleSheet.create({
   },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   cell: { width: 20, height: 20, borderRadius: 6 },
-  cellOn: { backgroundColor: "#20e5e5" },
-  cellOff: { backgroundColor: "#0f1c24" },
+  cellB0: { backgroundColor: "#0f1c24" },
+  cellB1: { backgroundColor: "rgba(32,229,229,0.25)" },
+  cellB2: { backgroundColor: "rgba(32,229,229,0.55)" },
+  cellB3: { backgroundColor: "#20e5e5" },
+  legendRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 6,
+    marginBottom: 4,
+  },
+  legendDot: { width: 14, height: 14, borderRadius: 6 },
+  legendLabel: { color: "#64748b", fontSize: 12 },
   sectionLead: {
     color: "#94a3b8",
     fontWeight: "700",

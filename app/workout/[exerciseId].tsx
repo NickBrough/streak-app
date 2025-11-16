@@ -8,6 +8,7 @@ import {
   Animated,
   Easing,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMotionDetector } from "@/hooks/useMotionDetector";
 import Button from "@/components/ui/Button";
 import { router, useLocalSearchParams } from "expo-router";
@@ -56,6 +57,7 @@ export default function WorkoutScreen() {
   const frameProcessor = usePoseFrame(onPose);
   const glowPulse = useRef(new Animated.Value(0)).current;
   const glowAnimRef = useRef<Animated.CompositeAnimation | null>(null);
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     if (loading || !user || sessionId) return;
@@ -259,6 +261,27 @@ export default function WorkoutScreen() {
         return null;
       })()}
       <Text style={styles.title}>{exerciseId?.toUpperCase()}</Text>
+      {/* Minimal daily total chip for the current exercise */}
+      <View
+        style={[
+          styles.todayRow,
+          { position: "absolute", top: insets.top + 12, right: 16, zIndex: 5 },
+        ]}
+      >
+        <View style={styles.todayChip}>
+          <View style={styles.todayIconWrap}>
+            <Text style={styles.todayIcon}>
+              {exerciseId === "pushup" ? "💪" : "🦵"}
+            </Text>
+          </View>
+          <View>
+            <Text style={styles.todayLabel}>Today</Text>
+            <Text style={styles.todayValue}>
+              {todayBaseCount + (useCameraMode ? camReps : repCount)}
+            </Text>
+          </View>
+        </View>
+      </View>
       {/* Center counter with Revolut-style progress ring */}
       <View style={styles.centerCounterWrap}>
         {goalLoaded && dailyGoal !== null ? (
@@ -536,6 +559,41 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   title: { color: "#94a3b8", fontSize: 14, letterSpacing: 2 },
+  todayRow: {
+    width: "100%",
+    alignItems: "center",
+    marginTop: 6,
+    marginBottom: 8,
+  },
+  todayChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    backgroundColor: "rgba(15, 23, 32, 0.7)",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255,255,255,0.06)",
+  },
+  todayIconWrap: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255,255,255,0.08)",
+  },
+  todayIcon: { fontSize: 16 },
+  todayLabel: { color: "#94a3b8", fontSize: 12, fontWeight: "700" },
+  todayValue: {
+    color: "#e6f0f2",
+    fontSize: 18,
+    fontWeight: "900",
+    letterSpacing: 0.5,
+  },
   centerCounterWrap: {
     width: 220,
     height: 220,
