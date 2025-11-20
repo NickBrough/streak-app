@@ -8,6 +8,7 @@ import StreakDisplay from "@/components/StreakDisplay";
 import ExerciseCard from "@/components/ExerciseCard";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
+import { useFocusEffect } from "@react-navigation/native";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -22,6 +23,7 @@ import { toLocalDayUtcKey } from "@/lib/date";
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [exercises, setExercises] = useState<
     {
       id: string;
@@ -75,10 +77,20 @@ export default function HomeScreen() {
     router.push(`/workout/${exerciseId}`);
   };
 
+  const loadAvatar = async (userId: string) => {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("avatar_url")
+      .eq("id", userId)
+      .maybeSingle();
+    setAvatarUrl((profile as any)?.avatar_url ?? null);
+  };
+
   useEffect(() => {
     if (!user) return;
     (async () => {
       try {
+        await loadAvatar(user.id);
         const { data: exData } = await supabase
           .from("exercises")
           .select("exercise_id,daily_goal")
@@ -152,6 +164,14 @@ export default function HomeScreen() {
     })();
   }, [user]);
 
+  useFocusEffect(
+    React.useCallback(() => {
+      if (user?.id) {
+        loadAvatar(user.id);
+      }
+    }, [user?.id])
+  );
+
   return (
     <Screen scroll contentStyle={styles.container}>
       {dayConfetti && (
@@ -174,10 +194,14 @@ export default function HomeScreen() {
           activeOpacity={0.7}
           style={styles.avatarChip}
         >
-          <Avatar name={user?.email ?? ""} size={36} />
+          <Avatar
+            uri={avatarUrl ?? undefined}
+            name={user?.email ?? ""}
+            size={36}
+          />
         </TouchableOpacity>
       </View>
-      
+
       <View style={styles.cardGlow}>
         <StreakDisplay days={last7Days} currentStreak={streak} />
       </View>
@@ -284,7 +308,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 10,
   },
-  
+
   avatarChip: {
     width: 36,
     height: 36,

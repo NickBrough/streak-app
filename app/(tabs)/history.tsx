@@ -126,6 +126,11 @@ export default function HistoryScreen() {
         ListHeaderComponent={
           <View>
             <Text style={styles.heading}>History</Text>
+            <View style={styles.ringWrap}>
+              <Ring value={weeklyStreak} max={7} />
+              <Text style={styles.ringLabel}>{weeklyStreak}/7</Text>
+              <Text style={[styles.sub, { marginTop: 8 }]}>Weekly streak</Text>
+            </View>
             <View style={styles.tilesRow}>
               <StatTile
                 title="Longest streak"
@@ -146,11 +151,7 @@ export default function HistoryScreen() {
                 style={{ flex: 1 }}
               />
             </View>
-            <View style={styles.ringWrap}>
-              <Ring value={weeklyStreak} max={7} />
-              <Text style={styles.ringLabel}>{weeklyStreak}/7</Text>
-              <Text style={styles.sub}>Weekly streak</Text>
-            </View>
+
             <View style={styles.grid}>
               {heatmap.map((d) => {
                 const bucket = d.bucket;
@@ -179,12 +180,18 @@ export default function HistoryScreen() {
               <View style={[styles.legendDot, styles.cellB3]} />
               <Text style={styles.legendLabel}>More</Text>
             </View>
-            <Text style={styles.sectionLead}>Consistency</Text>
-            <WeekdayBars counts={weekdayCounts} />
-            <Text style={styles.sub}>
+            <Text style={[styles.sectionLead, { marginTop: 24 }]}>
+              Consistency
+            </Text>
+            <View style={{ marginBottom: 8 }}>
+              <WeekdayBars counts={weekdayCounts} />
+            </View>
+            <Text style={[styles.sub, { marginTop: 8 }]}>
               Most consistent: {weekdayNames[mostConsistentIdx]}
             </Text>
-            <Text style={styles.sectionLead}>Activity</Text>
+            <Text style={[styles.sectionLead, { marginTop: 24 }]}>
+              Activity
+            </Text>
           </View>
         }
         renderSectionHeader={({ section }) => (
@@ -309,13 +316,13 @@ const styles = StyleSheet.create({
     color: "#e6f0f2",
     fontSize: 22,
     fontWeight: "800",
-    marginBottom: 12,
+    marginBottom: 20,
   },
   sub: { color: "#94a3b8", marginTop: 4 },
   ringWrap: {
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 16,
+    marginBottom: 24,
   },
   tilesRow: {
     flexDirection: "row",
@@ -323,7 +330,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: 10,
     flexWrap: "wrap",
-    marginBottom: 12,
+    marginBottom: 20,
   },
   ringLabel: {
     position: "absolute",
@@ -331,7 +338,12 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     fontSize: 18,
   },
-  grid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  grid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 8,
+  },
   cell: { width: 20, height: 20, borderRadius: 6 },
   cellB0: { backgroundColor: "#0f1c24" },
   cellB1: { backgroundColor: "rgba(32,229,229,0.25)" },
@@ -341,8 +353,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    marginTop: 6,
-    marginBottom: 4,
+    marginTop: 12,
+    marginBottom: 16,
   },
   legendDot: { width: 14, height: 14, borderRadius: 6 },
   legendLabel: { color: "#64748b", fontSize: 12 },
@@ -350,12 +362,12 @@ const styles = StyleSheet.create({
     color: "#94a3b8",
     fontWeight: "700",
     marginTop: 16,
-    marginBottom: 8,
+    marginBottom: 12,
     letterSpacing: 0.3,
   },
   sectionHeader: {
     backgroundColor: "#06121f",
-    paddingVertical: 6,
+    paddingVertical: 12,
   },
   sectionTitle: {
     color: "#94a3b8",
@@ -373,7 +385,8 @@ const styles = StyleSheet.create({
     padding: 12,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: "rgba(255,255,255,0.06)",
-    marginTop: 10,
+    marginTop: 12,
+    marginBottom: 4,
   },
   rowMet: {
     borderColor: "#20e5e5",
@@ -402,6 +415,6 @@ const styles = StyleSheet.create({
   emptyText: {
     color: "#94a3b8",
     textAlign: "center",
-    marginTop: 24,
+    marginTop: 40,
   },
 });

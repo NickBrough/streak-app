@@ -17,7 +17,9 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.nickbrough.streak-app",
       "infoPlist": {
-        "NSCameraUsageDescription": "Streak uses the camera to detect your exercise reps."
+        "NSCameraUsageDescription": "Streak uses the camera to detect your exercise reps.",
+        "NSPhotoLibraryUsageDescription": "Allow Streak to access your photos to choose an avatar.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -26,7 +28,6 @@
         "backgroundColor": "#ffffff"
       },
       "permissions": [
-        "android.permission.CAMERA",
         "android.permission.CAMERA"
       ],
       "edgeToEdgeEnabled": true,
@@ -46,6 +47,12 @@
         }
       ],
       "react-native-vision-camera"
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "acf9dc6d-42df-4922-8966-d76ce3a2a098"
+      }
+    }
   }
 }

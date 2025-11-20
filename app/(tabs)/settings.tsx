@@ -5,10 +5,12 @@ import Button from "@/components/ui/Button";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/lib/supabase";
 import Screen from "@/components/ui/Screen";
+import ProfileAvatarPicker from "@/components/profile/ProfileAvatarPicker";
 
 export default function SettingsScreen() {
   const { user, signOut } = useAuth();
   const [handle, setHandle] = useState("");
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [pushupGoal, setPushupGoal] = useState("20");
   const [squatGoal, setSquatGoal] = useState("30");
   const [pushupEnabled, setPushupEnabled] = useState(true);
@@ -21,10 +23,11 @@ export default function SettingsScreen() {
     (async () => {
       const { data: profile } = await supabase
         .from("profiles")
-        .select("handle")
+        .select("handle,avatar_url")
         .eq("id", user.id)
         .maybeSingle();
       if (profile?.handle) setHandle(profile.handle);
+      setAvatarUrl((profile as any)?.avatar_url ?? null);
 
       const { data: ex } = await supabase
         .from("exercises")
@@ -48,6 +51,13 @@ export default function SettingsScreen() {
       <Text style={styles.heading}>Settings</Text>
 
       <Text style={styles.section}>Profile</Text>
+      {user ? (
+        <ProfileAvatarPicker
+          userId={user.id}
+          currentUrl={avatarUrl}
+          onChanged={setAvatarUrl}
+        />
+      ) : null}
       <Input placeholder="Handle" value={handle} onChangeText={setHandle} />
 
       <View style={{ height: 16 }} />
