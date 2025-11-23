@@ -34,7 +34,11 @@ export function usePoseDetector(det: DetectorType) {
       setProgress((res as any).progress);
     if (res.didRep) {
       setReps(res.reps);
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      try {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      } catch (error) {
+        // Ignore haptic errors
+      }
     }
   }
 

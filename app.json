@@ -19,6 +19,10 @@
       "infoPlist": {
         "NSCameraUsageDescription": "Streak uses the camera to detect your exercise reps.",
         "NSPhotoLibraryUsageDescription": "Allow Streak to access your photos to choose an avatar.",
+        "NSPhotoLibraryAddUsageDescription": "Allow Streak to save images to your photo library.",
+        "NSMotionUsageDescription": "Allow Streak to use motion sensors to count your reps",
+        "NSUserNotificationsUsageDescription": "Streak uses notifications to remind you about your daily exercise goals.",
+        "NSLocationWhenInUseUsageDescription": "This app does not use location services. This permission may be required by third-party libraries used in the app.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
@@ -46,7 +50,8 @@
           "motionPermission": "Allow Streak to use motion sensors to count your reps"
         }
       ],
-      "react-native-vision-camera"
+      "react-native-vision-camera",
+      "sentry-expo"
     ],
     "extra": {
       "router": {},

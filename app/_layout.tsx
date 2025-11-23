@@ -4,6 +4,15 @@ import { StatusBar } from "expo-status-bar";
 import { useAuth } from "@/hooks/useAuth";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import * as Linking from "expo-linking";
+import * as Sentry from "sentry-expo";
+
+// Initialize Sentry
+Sentry.init({
+  dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
+  enableInExpoDevelopment: false,
+  debug: false,
+  environment: __DEV__ ? "development" : "production",
+});
 
 export default function RootLayout() {
   const { user, loading } = useAuth();
@@ -29,16 +38,40 @@ export default function RootLayout() {
           qs.set("addfriend", "1");
           router.push(`/ (tabs)/social?${qs.toString()}`.replace(" ", ""));
         }
-      } catch {
+      } catch (error) {
         // ignore invalid URLs
+        Sentry.captureException(error);
       }
     };
-    Linking.getInitialURL().then(handleUrl);
-    const sub = Linking.addEventListener("url", (e) => handleUrl(e.url));
-    return () => {
-      // @ts-expect-error type compat between SDKs
-      sub?.remove?.();
-    };
+    
+    // Safely initialize Linking
+    try {
+      if (Linking && typeof Linking.getInitialURL === "function") {
+        Linking.getInitialURL()
+          .then(handleUrl)
+          .catch((error) => {
+            // Ignore linking errors on app startup
+            console.warn("Failed to get initial URL:", error);
+            Sentry.captureException(error);
+          });
+      }
+      
+      if (Linking && typeof Linking.addEventListener === "function") {
+        const sub = Linking.addEventListener("url", (e) => handleUrl(e.url));
+        return () => {
+          try {
+            // @ts-expect-error type compat between SDKs
+            sub?.remove?.();
+          } catch (error) {
+            // Ignore errors when removing listener
+            Sentry.captureException(error);
+          }
+        };
+      }
+    } catch (error) {
+      console.warn("Linking module not available:", error);
+      Sentry.captureException(error);
+    }
   }, []);
   return (
     <SafeAreaProvider>

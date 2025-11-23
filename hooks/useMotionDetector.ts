@@ -21,57 +21,104 @@ export function useMotionDetector({
   useEffect(() => {
     if (!isActive) {
       if (subscriptionRef.current) {
-        subscriptionRef.current.remove();
+        try {
+          subscriptionRef.current.remove();
+        } catch (error) {
+          // Ignore errors when removing subscription
+        }
         subscriptionRef.current = null;
       }
       return;
     }
 
-    Accelerometer.setUpdateInterval(100);
+    // Ensure Accelerometer module is available before using it
+    if (!Accelerometer || typeof Accelerometer.setUpdateInterval !== "function") {
+      console.warn("Accelerometer module not available");
+      return;
+    }
 
-    subscriptionRef.current = Accelerometer.addListener(({ z }) => {
-      const now = Date.now();
-      const timeSinceLastRep = now - lastRepTimeRef.current;
-      const MIN_REP_TIME = 500;
-      if (timeSinceLastRep < MIN_REP_TIME) return;
+    try {
+      Accelerometer.setUpdateInterval(100);
+    } catch (error) {
+      console.error("Failed to set accelerometer update interval:", error);
+      return;
+    }
 
-      if (exerciseType === "pushup") {
-        const DOWN_THRESHOLD = -0.2;
-        const UP_THRESHOLD = 0.2;
-        if (stateRef.current === "waiting" && z < DOWN_THRESHOLD) {
-          stateRef.current = "down";
-        } else if (stateRef.current === "down" && z > UP_THRESHOLD) {
-          stateRef.current = "waiting";
-          lastRepTimeRef.current = now;
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-          onRepDetected();
+    try {
+      subscriptionRef.current = Accelerometer.addListener(({ z }) => {
+        try {
+          const now = Date.now();
+          const timeSinceLastRep = now - lastRepTimeRef.current;
+          const MIN_REP_TIME = 500;
+          if (timeSinceLastRep < MIN_REP_TIME) return;
+
+          if (exerciseType === "pushup") {
+            const DOWN_THRESHOLD = -0.2;
+            const UP_THRESHOLD = 0.2;
+            if (stateRef.current === "waiting" && z < DOWN_THRESHOLD) {
+              stateRef.current = "down";
+            } else if (stateRef.current === "down" && z > UP_THRESHOLD) {
+              stateRef.current = "waiting";
+              lastRepTimeRef.current = now;
+              try {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              } catch (hapticError) {
+                // Ignore haptic errors
+              }
+              onRepDetected();
+            }
+          }
+
+          if (exerciseType === "squat") {
+            const DOWN_THRESHOLD = -0.3;
+            const UP_THRESHOLD = 0.3;
+            if (stateRef.current === "waiting" && z < DOWN_THRESHOLD) {
+              stateRef.current = "down";
+            } else if (stateRef.current === "down" && z > UP_THRESHOLD) {
+              stateRef.current = "waiting";
+              lastRepTimeRef.current = now;
+              try {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              } catch (hapticError) {
+                // Ignore haptic errors
+              }
+              onRepDetected();
+            }
+          }
+        } catch (error) {
+          // Ignore errors in listener callback to prevent crashes
+          console.error("Error in accelerometer listener:", error);
         }
-      }
-
-      if (exerciseType === "squat") {
-        const DOWN_THRESHOLD = -0.3;
-        const UP_THRESHOLD = 0.3;
-        if (stateRef.current === "waiting" && z < DOWN_THRESHOLD) {
-          stateRef.current = "down";
-        } else if (stateRef.current === "down" && z > UP_THRESHOLD) {
-          stateRef.current = "waiting";
-          lastRepTimeRef.current = now;
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-          onRepDetected();
-        }
-      }
-    });
+      });
+    } catch (error) {
+      console.error("Failed to add accelerometer listener:", error);
+      return;
+    }
 
     return () => {
-      if (subscriptionRef.current) subscriptionRef.current.remove();
+      if (subscriptionRef.current) {
+        try {
+          subscriptionRef.current.remove();
+        } catch (error) {
+          // Ignore errors when removing subscription
+        }
+      }
     };
   }, [isActive, exerciseType, onRepDetected]);
 
   const startDetection = async () => {
-    const { status } = await Accelerometer.requestPermissionsAsync();
-    if (status === "granted") {
-      setIsActive(true);
-      stateRef.current = "waiting";
+    try {
+      if (!Accelerometer || typeof Accelerometer.requestPermissionsAsync !== "function") {
+        console.warn("Accelerometer module not available");
+        return;
+      }
+      const { status } = await Accelerometer.requestPermissionsAsync();
+      if (status === "granted") {
+        setIsActive(true);
+        stateRef.current = "waiting";
+      }
+    } catch (error) {
+      console.error("Failed to start motion detection:", error);
     }
   };
 

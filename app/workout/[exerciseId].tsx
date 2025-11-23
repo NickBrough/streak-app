@@ -54,10 +54,35 @@ export default function WorkoutScreen() {
   const [authorized, setAuthorized] = useState<boolean | null>(null);
   const [cameraDevice, setCameraDevice] = useState<any>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
+  const [poseDetectorReady, setPoseDetectorReady] = useState(false);
   const frameProcessor = usePoseFrame(onPose);
   const glowPulse = useRef(new Animated.Value(0)).current;
   const glowAnimRef = useRef<Animated.CompositeAnimation | null>(null);
   const insets = useSafeAreaInsets();
+
+  // Check if native pose detector is available
+  useEffect(() => {
+    if (!useCameraMode) return;
+    // Check for native pose detector module
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const checkPoseDetector = () => {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const poseModule = (globalThis as any)?.__pose;
+        if (poseModule && typeof poseModule?.detect === "function") {
+          setPoseDetectorReady(true);
+        } else {
+          setPoseDetectorReady(false);
+        }
+      } catch {
+        setPoseDetectorReady(false);
+      }
+    };
+    checkPoseDetector();
+    // Check periodically in case it loads asynchronously
+    const interval = setInterval(checkPoseDetector, 500);
+    return () => clearInterval(interval);
+  }, [useCameraMode]);
 
   useEffect(() => {
     if (loading || !user || sessionId) return;
@@ -89,35 +114,52 @@ export default function WorkoutScreen() {
     try {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       const mod = require("react-native-vision-camera");
+      if (!mod || !mod.Camera) {
+        setCameraError("Camera module not available");
+        return;
+      }
       setVc(mod);
       (async () => {
         try {
-          if (mod?.Camera) {
+          // Check if Camera methods exist before calling
+          if (
+            mod?.Camera &&
+            typeof mod.Camera.requestCameraPermission === "function" &&
+            typeof mod.Camera.getAvailableCameraDevices === "function"
+          ) {
             const status = await mod.Camera.requestCameraPermission();
             const granted = status === "granted";
             setAuthorized(granted);
             if (granted) {
               const list = await mod.Camera.getAvailableCameraDevices();
-              const chosen =
-                list?.find((d: any) => d.position === "front") ??
-                list?.find((d: any) => d.position === "back") ??
-                null;
-              if (chosen) {
-                setCameraDevice(chosen);
+              if (Array.isArray(list) && list.length > 0) {
+                const chosen =
+                  list.find((d: any) => d?.position === "front") ??
+                  list.find((d: any) => d?.position === "back") ??
+                  null;
+                if (chosen) {
+                  setCameraDevice(chosen);
+                } else {
+                  setCameraError("No suitable camera device found");
+                }
               } else {
-                setCameraError("Camera mode not allowed on your device");
+                setCameraError("No camera devices available");
               }
             } else {
-              setCameraError("Camera mode not allowed on your device");
+              setCameraError("Camera permission denied");
               return;
             }
+          } else {
+            setCameraError("Camera module not properly initialized");
           }
-        } catch {
-          setCameraError("Camera mode not allowed on your device");
+        } catch (error) {
+          console.error("Camera initialization error:", error);
+          setCameraError("Failed to initialize camera");
         }
       })();
-    } catch {
-      setCameraError("Camera mode not allowed on your device");
+    } catch (error) {
+      console.error("Failed to load camera module:", error);
+      setCameraError("Camera module not available");
     }
   }, [useCameraMode, isExpoGo]);
 
@@ -184,7 +226,11 @@ export default function WorkoutScreen() {
     if (!goalLoaded || goalCelebrated || !dailyGoal || dailyGoal <= 0) return;
     if (projectedTotal >= dailyGoal) {
       setGoalCelebrated(true);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      try {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } catch (error) {
+        // Ignore haptic errors
+      }
     }
   }, [goalLoaded, dailyGoal, projectedTotal, goalCelebrated]);
 
@@ -225,7 +271,8 @@ export default function WorkoutScreen() {
       vc?.Camera &&
       cameraDevice &&
       authorized &&
-      !cameraError ? (
+      !cameraError &&
+      poseDetectorReady ? (
         <vc.Camera
           style={StyleSheet.absoluteFill}
           device={cameraDevice}
@@ -422,7 +469,11 @@ export default function WorkoutScreen() {
             },
           ]}
           onPress={async () => {
-            await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            try {
+              await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            } catch (error) {
+              // Ignore haptic errors
+            }
             if (useCameraMode) addManual(-1);
             else setRepCount((p) => Math.max(0, p - 1));
           }}
@@ -432,7 +483,11 @@ export default function WorkoutScreen() {
         <TouchableOpacity
           style={[styles.circleBtnLarge, { backgroundColor: "#20e5e5" }]}
           onPress={async () => {
-            await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+            try {
+              await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+            } catch (error) {
+              // Ignore haptic errors
+            }
             if (useCameraMode) addManual(1);
             else setRepCount((p) => p + 1);
           }}
@@ -448,7 +503,11 @@ export default function WorkoutScreen() {
             },
           ]}
           onPress={async () => {
-            await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            try {
+              await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            } catch (error) {
+              // Ignore haptic errors
+            }
             if (useCameraMode) addManual(5);
             else setRepCount((p) => p + 5);
           }}

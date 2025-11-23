@@ -1,7 +1,40 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Tabs } from "expo-router";
-import { BlurView } from "expo-blur";
+import { View } from "react-native";
 import { Home, Clock, Users, Settings } from "lucide-react-native";
+
+// Safe BlurView wrapper that falls back to View if BlurView fails
+function SafeBlurView({ style, ...props }: any) {
+  const [BlurView, setBlurView] = useState<React.ComponentType<any> | null>(null);
+
+  useEffect(() => {
+    // Lazy load BlurView after component mounts to avoid crashes during module initialization
+    try {
+      const blurModule = require("expo-blur");
+      if (blurModule?.BlurView) {
+        setBlurView(() => blurModule.BlurView);
+      }
+    } catch (error) {
+      // Fallback to View if BlurView fails
+      console.warn("BlurView not available, using fallback:", error);
+    }
+  }, []);
+
+  if (BlurView) {
+    return <BlurView style={style} {...props} />;
+  }
+
+  // Fallback View with similar styling
+  return (
+    <View
+      style={[
+        style,
+        { backgroundColor: "rgba(15, 23, 32, 0.8)" },
+      ]}
+      {...props}
+    />
+  );
+}
 
 export default function TabLayout() {
   return (
@@ -22,7 +55,7 @@ export default function TabLayout() {
           borderTopColor: "transparent",
         },
         tabBarBackground: () => (
-          <BlurView
+          <SafeBlurView
             intensity={25}
             tint="dark"
             style={{ flex: 1, borderRadius: 18, overflow: "hidden" }}
