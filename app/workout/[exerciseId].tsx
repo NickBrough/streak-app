@@ -14,6 +14,7 @@ import Button from "@/components/ui/Button";
 import { router, useLocalSearchParams } from "expo-router";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
+import { logError, logMessage } from "@/lib/sentry";
 import * as Haptics from "expo-haptics";
 import ConfettiCannon from "react-native-confetti-cannon";
 import Constants from "expo-constants";
@@ -88,14 +89,27 @@ export default function WorkoutScreen() {
     if (loading || !user || sessionId) return;
     let mounted = true;
     (async () => {
-      const { data, error } = await supabase
-        .from("sessions")
-        .insert({ user_id: user.id, mode: useCameraMode ? "camera" : "motion" })
-        .select()
-        .single();
-      if (!error && data && mounted) {
-        setSessionId(data.id);
-        if (!useCameraMode) startDetection();
+      try {
+        const { data, error } = await supabase
+          .from("sessions")
+          .insert({
+            user_id: user.id,
+            mode: useCameraMode ? "camera" : "motion",
+          })
+          .select()
+          .single();
+        if (error) {
+          logError(error, {
+            screen: "workout",
+            phase: "create_session",
+          });
+        }
+        if (!error && data && mounted) {
+          setSessionId(data.id);
+          if (!useCameraMode) startDetection();
+        }
+      } catch (error) {
+        logError(error, { screen: "workout", phase: "create_session_catch" });
       }
     })();
     return () => {
@@ -175,13 +189,19 @@ export default function WorkoutScreen() {
     let mounted = true;
     (async () => {
       try {
-        const { data: exRow } = await supabase
+        const { data: exRow, error: exError } = await supabase
           .from("exercises")
           .select("daily_goal")
           .eq("user_id", user.id)
           .eq("exercise_id", exerciseId)
           .eq("enabled", true)
           .maybeSingle();
+        if (exError) {
+          logError(exError, {
+            screen: "workout",
+            phase: "load_goal",
+          });
+        }
         const defaultGoals: Record<"pushup" | "squat", number> = {
           pushup: 30,
           squat: 20,
@@ -189,19 +209,26 @@ export default function WorkoutScreen() {
         const fallback = defaultGoals[exerciseId] ?? 25;
         const goal = Math.max(0, exRow?.daily_goal ?? fallback);
         const today = toLocalDayUtcKey();
-        const { data: totalsRow } = await supabase
+        const { data: totalsRow, error: totalsError } = await supabase
           .from("daily_totals")
           .select("totals")
           .eq("user_id", user.id)
           .eq("date", today)
           .maybeSingle();
+        if (totalsError) {
+          logError(totalsError, {
+            screen: "workout",
+            phase: "load_today_totals",
+          });
+        }
         const base = Math.max(0, totalsRow?.totals?.[exerciseId] ?? 0);
         if (!mounted) return;
         setDailyGoal(goal);
         setTodayBaseCount(base);
         setGoalLoaded(true);
-      } catch {
+      } catch (error) {
         if (!mounted) return;
+        logError(error, { screen: "workout", phase: "load_goal_catch" });
         // Soft-fallbacks
         setDailyGoal(exerciseId === "pushup" ? 30 : 20);
         setTodayBaseCount(0);
@@ -533,7 +560,6 @@ export default function WorkoutScreen() {
           if (!useCameraMode) stopDetection();
           if (user && sessionId && exerciseId) {
             try {
-              console.log("ending session", sessionId);
               await supabase
                 .from("sessions")
                 .update({ ended_at: new Date().toISOString() })
@@ -546,15 +572,19 @@ export default function WorkoutScreen() {
               });
 
               const today = toLocalDayUtcKey();
-              console.log("today", today);
-              const { data: existing } = await supabase
+              const { data: existing, error: existingError } = await supabase
                 .from("daily_totals")
                 .select("id,totals")
                 .eq("user_id", user.id)
                 .eq("date", today)
                 .maybeSingle();
+              if (existingError) {
+                logError(existingError, {
+                  screen: "workout",
+                  phase: "load_daily_totals",
+                });
+              }
 
-              console.log("existing", existing);
               const currentTotals: any = existing?.totals ?? {
                 pushup: 0,
                 squat: 0,
@@ -564,11 +594,17 @@ export default function WorkoutScreen() {
                 (useCameraMode ? camReps : repCount);
 
               // compute met_goal from exercises
-              const { data: exData } = await supabase
+              const { data: exData, error: exError } = await supabase
                 .from("exercises")
                 .select("exercise_id,daily_goal")
                 .eq("user_id", user.id)
                 .eq("enabled", true);
+              if (exError) {
+                logError(exError, {
+                  screen: "workout",
+                  phase: "load_exercises_for_met_goal",
+                });
+              }
 
               const metGoal = (exData ?? []).every(
                 (e) =>
@@ -576,30 +612,43 @@ export default function WorkoutScreen() {
               );
 
               if (existing) {
-                await supabase
+                const { error: updateError } = await supabase
                   .from("daily_totals")
                   .update({ totals: currentTotals, met_goal: metGoal })
                   .eq("id", existing.id);
-                console.log("updated daily_totals", existing.id);
+                if (updateError) {
+                  logError(updateError, {
+                    screen: "workout",
+                    phase: "update_daily_totals",
+                  });
+                }
               } else {
-                console.log(
-                  "inserting daily_totals",
-                  user.id,
-                  today,
-                  currentTotals,
-                  metGoal,
-                  1
-                );
-                await supabase.from("daily_totals").insert({
-                  user_id: user.id,
-                  date: today,
-                  totals: currentTotals,
-                  met_goal: metGoal,
-                  streak: 1,
-                });
+                const { error: insertError } = await supabase
+                  .from("daily_totals")
+                  .insert({
+                    user_id: user.id,
+                    date: today,
+                    totals: currentTotals,
+                    met_goal: metGoal,
+                    streak: 1,
+                  });
+                if (insertError) {
+                  logError(insertError, {
+                    screen: "workout",
+                    phase: "insert_daily_totals",
+                  });
+                }
               }
+
+              logMessage("Workout session ended", {
+                screen: "workout",
+                sessionId,
+                exerciseId,
+                reps: useCameraMode ? camReps : repCount,
+                metGoal,
+              });
             } catch (error) {
-              console.error("error", error);
+              logError(error, { screen: "workout", phase: "end_workout" });
             }
           }
           router.replace("/");

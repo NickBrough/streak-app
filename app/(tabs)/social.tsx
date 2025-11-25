@@ -14,6 +14,7 @@ import LeaderboardRow, {
 } from "@/components/social/LeaderboardRow";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
+import { logError, logMessage } from "@/lib/sentry";
 import { toLocalDayUtcKey } from "@/lib/date";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AddFriendsSheet from "@/components/social/AddFriendsSheet";
@@ -145,7 +146,11 @@ export default function SocialScreen() {
               ...Array.from(friendIds),
             ]);
             list = list.filter((e) => allowed.has(e.userId));
-          } catch {
+          } catch (error) {
+            logError(error, {
+              screen: "social",
+              phase: "load_friends_scope",
+            });
             // if query fails, fall back to global
           }
         }
@@ -153,10 +158,13 @@ export default function SocialScreen() {
         // If viewing all-time, aggregate over all historical rows for candidate users
         if (period === "all" && candidateIds.size > 0) {
           const ids = Array.from(candidateIds);
-          const { data: allRows } = await supabase
+          const { data: allRows, error: allErr } = await supabase
             .from("daily_totals")
             .select("user_id,date,totals,met_goal,streak")
             .in("user_id", ids);
+          if (allErr) {
+            throw allErr;
+          }
           const agg = new Map<string, LeaderboardEntry>();
           for (const row of allRows ?? []) {
             const uid = row.user_id as string;
@@ -191,10 +199,13 @@ export default function SocialScreen() {
         // Fetch profiles for user metadata
         if (list.length > 0) {
           const ids = list.map((e) => e.userId);
-          const { data: profs } = await supabase
+          const { data: profs, error: profErr } = await supabase
             .from("profiles")
             .select("id,handle,avatar_url")
             .in("id", ids);
+          if (profErr) {
+            throw profErr;
+          }
           const byId = new Map<
             string,
             { handle?: string; avatar_url?: string }
@@ -225,8 +236,20 @@ export default function SocialScreen() {
           return (b.lastActive ?? "") < (a.lastActive ?? "") ? -1 : 1;
         });
         if (mounted) setEntries(list);
+
+        logMessage("Social leaderboard loaded", {
+          screen: "social",
+          entries: list.length,
+          mode,
+          period,
+          scope,
+        });
       } catch (e: any) {
         if (mounted) setError(e?.message ?? "Failed to load leaderboard");
+        logError(e, {
+          screen: "social",
+          phase: "load_leaderboard",
+        });
       } finally {
         if (mounted) setLoading(false);
       }

@@ -8,6 +8,7 @@ import StreakDisplay from "@/components/StreakDisplay";
 import ExerciseCard from "@/components/ExerciseCard";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
+import { logError, logMessage } from "@/lib/sentry";
 import { useFocusEffect } from "@react-navigation/native";
 import Animated, {
   useSharedValue,
@@ -78,11 +79,14 @@ export default function HomeScreen() {
   };
 
   const loadAvatar = async (userId: string) => {
-    const { data: profile } = await supabase
+    const { data: profile, error } = await supabase
       .from("profiles")
       .select("avatar_url")
       .eq("id", userId)
       .maybeSingle();
+    if (error) {
+      logError(error, { screen: "home", phase: "load_avatar" });
+    }
     setAvatarUrl((profile as any)?.avatar_url ?? null);
   };
 
@@ -91,11 +95,14 @@ export default function HomeScreen() {
     (async () => {
       try {
         await loadAvatar(user.id);
-        const { data: exData } = await supabase
+        const { data: exData, error: exError } = await supabase
           .from("exercises")
           .select("exercise_id,daily_goal")
           .eq("user_id", user.id)
           .eq("enabled", true);
+        if (exError) {
+          logError(exError, { screen: "home", phase: "load_exercises" });
+        }
         const mapped = (exData ?? []).map((e) => ({
           id: e.exercise_id,
           exercise_id: e.exercise_id,
@@ -106,12 +113,15 @@ export default function HomeScreen() {
         setExercises(mapped);
 
         const today = toLocalDayUtcKey();
-        const { data: todayData } = await supabase
+        const { data: todayData, error: todayError } = await supabase
           .from("daily_totals")
           .select("totals,streak,met_goal")
           .eq("user_id", user.id)
           .eq("date", today)
           .maybeSingle();
+        if (todayError) {
+          logError(todayError, { screen: "home", phase: "load_today" });
+        }
         if (todayData) {
           setTotals(todayData.totals as any);
           setStreak(todayData.streak ?? 0);
@@ -121,12 +131,15 @@ export default function HomeScreen() {
           setStreak(0);
         }
 
-        const { data: weekData } = await supabase
+        const { data: weekData, error: weekError } = await supabase
           .from("daily_totals")
           .select("met_goal,date")
           .eq("user_id", user.id)
           .order("date", { ascending: false })
           .limit(365); // cover long streaks
+        if (weekError) {
+          logError(weekError, { screen: "home", phase: "load_history" });
+        }
 
         // Map of date => met_goal for quick lookup
         const metByDate: Record<string, boolean> = {};
@@ -160,7 +173,15 @@ export default function HomeScreen() {
         setStreak(computedStreak);
 
         setLast7Days(completed);
-      } catch {}
+
+        logMessage("Home screen stats loaded", {
+          screen: "home",
+          exercisesCount: mapped.length,
+          streak,
+        });
+      } catch (error) {
+        logError(error, { screen: "home", phase: "load_home_data" });
+      }
     })();
   }, [user]);
 
@@ -209,7 +230,6 @@ export default function HomeScreen() {
       <View style={styles.cardGlass}>
         {exercises.map((ex) => {
           const cur = totals[ex.exercise_id] ?? 0;
-          console.log("cur", cur, ex.goal, ex.exercise_id);
           const complete = cur >= ex.goal;
           const anyIncompleteExists = exercises.some(
             (e) => (totals[e.exercise_id] ?? 0) < e.goal

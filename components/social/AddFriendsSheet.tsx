@@ -13,6 +13,7 @@ import Button from "@/components/ui/Button";
 import Avatar from "@/components/ui/Avatar";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/lib/supabase";
+import { logError, logMessage } from "@/lib/sentry";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 type Profile = { id: string; handle: string; avatar_url?: string | null };
@@ -62,21 +63,33 @@ export default function AddFriendsSheet({
     (async () => {
       setLoadingInvites(true);
       try {
-        const { data: frs } = await supabase
+        const { data: frs, error: friendsError } = await supabase
           .from("friendships")
           .select("user_id1,user_id2")
           .or(`user_id1.eq.${user.id},user_id2.eq.${user.id}`);
+        if (friendsError) {
+          logError(friendsError, {
+            screen: "add_friends",
+            phase: "load_friendships",
+          });
+        }
         const set = new Set<string>();
         (frs ?? []).forEach((r: any) => {
           const fid = r.user_id1 === user.id ? r.user_id2 : r.user_id1;
           set.add(fid as string);
         });
         setFriendIds(set);
-        const { data: reqs } = await supabase
+        const { data: reqs, error: reqsError } = await supabase
           .from("friend_requests")
           .select("id,requester_id,addressee_id,status")
           .or(`requester_id.eq.${user.id},addressee_id.eq.${user.id}`)
           .eq("status", "pending");
+        if (reqsError) {
+          logError(reqsError, {
+            screen: "add_friends",
+            phase: "load_friend_requests",
+          });
+        }
         const inc: FriendRequest[] = [];
         const out: FriendRequest[] = [];
         (reqs ?? []).forEach((r: any) => {
@@ -85,6 +98,8 @@ export default function AddFriendsSheet({
         });
         setIncoming(inc);
         setOutgoing(out);
+      } catch (error) {
+        logError(error, { screen: "add_friends", phase: "load_invites" });
       } finally {
         setLoadingInvites(false);
       }
@@ -102,13 +117,20 @@ export default function AddFriendsSheet({
     setSearching(true);
     try {
       const q = text.trim().replace(/^@+/, "");
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("profiles")
         .select("id,handle,avatar_url")
         .ilike("handle", `%${q}%`)
         .limit(20);
-      console.log(data);
+      if (error) {
+        logError(error, { screen: "add_friends", phase: "search_profiles" });
+      }
       setResults((data as any) ?? []);
+      logMessage("Friend search executed", {
+        screen: "add_friends",
+        query: q,
+        results: (data as any)?.length ?? 0,
+      });
     } finally {
       setSearching(false);
     }
@@ -130,7 +152,15 @@ export default function AddFriendsSheet({
     const url = `streak://add-friend?inviter=${encodeURIComponent(
       user.id
     )}&handle=${encodeURIComponent(handle)}`;
-    await Share.share({ url, message: url });
+    try {
+      await Share.share({ url, message: url });
+      logMessage("Friend invite link shared", {
+        screen: "add_friends",
+        inviter: user.id,
+      });
+    } catch (error) {
+      logError(error, { screen: "add_friends", phase: "share_invite" });
+    }
   };
 
   return (
@@ -191,29 +221,40 @@ export default function AddFriendsSheet({
                         .eq("status", "pending")
                         .select("id,status")
                         .single();
-                      if (error) {
-                        console.warn("Accept request failed", error);
-                        return;
-                      }
-                      if (data?.status !== "accepted") {
-                        console.warn("Accept request did not update row");
+                      if (error || data?.status !== "accepted") {
+                        logError(error ?? new Error("Accept request failed"), {
+                          screen: "add_friends",
+                          phase: "accept_request",
+                        });
                         return;
                       }
                       setIncoming((prev) => prev.filter((r) => r.id !== reqId));
                       setFriendIds((set) => new Set(set).add(item.id));
                     }}
                     onDecline={async (reqId) => {
-                      await supabase
+                      const { error } = await supabase
                         .from("friend_requests")
                         .update({ status: "declined" })
                         .eq("id", reqId);
+                      if (error) {
+                        logError(error, {
+                          screen: "add_friends",
+                          phase: "decline_request",
+                        });
+                      }
                       setIncoming((prev) => prev.filter((r) => r.id !== reqId));
                     }}
                     onCancel={async (reqId) => {
-                      await supabase
+                      const { error } = await supabase
                         .from("friend_requests")
                         .update({ status: "cancelled" })
                         .eq("id", reqId);
+                      if (error) {
+                        logError(error, {
+                          screen: "add_friends",
+                          phase: "cancel_request",
+                        });
+                      }
                       setOutgoing((prev) => prev.filter((r) => r.id !== reqId));
                     }}
                     onAdd={async () => {
@@ -226,7 +267,14 @@ export default function AddFriendsSheet({
                         })
                         .select("id")
                         .single();
-                      if (!error && data?.id) {
+                      if (error || !data?.id) {
+                        logError(error ?? new Error("Send request failed"), {
+                          screen: "add_friends",
+                          phase: "send_request",
+                        });
+                        return;
+                      }
+                      if (data?.id) {
                         setOutgoing((prev) => [
                           ...prev,
                           {
@@ -272,12 +320,11 @@ export default function AddFriendsSheet({
                         .eq("status", "pending")
                         .select("id,status,requester_id,addressee_id")
                         .single();
-                      if (error) {
-                        console.warn("Accept invite failed", error);
-                        return;
-                      }
-                      if (data?.status !== "accepted") {
-                        console.warn("Accept invite did not update row");
+                      if (error || data?.status !== "accepted") {
+                        logError(error ?? new Error("Accept invite failed"), {
+                          screen: "add_friends",
+                          phase: "accept_invite",
+                        });
                         return;
                       }
                       setIncoming((prev) =>
@@ -292,10 +339,16 @@ export default function AddFriendsSheet({
                       }
                     }}
                     onDecline={async () => {
-                      await supabase
+                      const { error } = await supabase
                         .from("friend_requests")
                         .update({ status: "declined" })
                         .eq("id", item.id);
+                      if (error) {
+                        logError(error, {
+                          screen: "add_friends",
+                          phase: "decline_invite",
+                        });
+                      }
                       setIncoming((prev) =>
                         prev.filter((r) => r.id !== item.id)
                       );

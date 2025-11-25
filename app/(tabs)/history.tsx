@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { View, Text, StyleSheet, SectionList } from "react-native";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
+import { logError } from "@/lib/sentry";
 import Svg, { Circle } from "react-native-svg";
 import Screen from "@/components/ui/Screen";
 import { toLocalDayUtcKey } from "@/lib/date";
@@ -35,30 +36,38 @@ export default function HistoryScreen() {
   useEffect(() => {
     if (!user) return;
     (async () => {
-      const { data } = await supabase
-        .from("daily_totals")
-        .select("date,met_goal,totals")
-        .eq("user_id", user.id)
-        .order("date", { ascending: true });
+      try {
+        const { data, error } = await supabase
+          .from("daily_totals")
+          .select("date,met_goal,totals")
+          .eq("user_id", user.id)
+          .order("date", { ascending: true });
 
-      const all: DayRec[] = (data ?? []).map((d: any) => ({
-        date: d.date,
-        met_goal: !!d.met_goal,
-        totals: (d.totals as any) ?? {},
-      }));
-      setHistoryDays(all.sort((a, b) => (a.date < b.date ? 1 : -1)));
+        if (error) {
+          logError(error, { screen: "history", phase: "load_history" });
+        }
 
-      // Build a filled last-30-days series for the ring/heatmap
-      const map = new Map<string, DayRec>();
-      for (const d of all) map.set(d.date, d);
-      const out: DayRec[] = [];
-      for (let i = 29; i >= 0; i--) {
-        const dt = new Date();
-        dt.setDate(dt.getDate() - i);
-        const key = toLocalDayUtcKey(dt);
-        out.push(map.get(key) ?? { date: key, met_goal: false, totals: {} });
+        const all: DayRec[] = (data ?? []).map((d: any) => ({
+          date: d.date,
+          met_goal: !!d.met_goal,
+          totals: (d.totals as any) ?? {},
+        }));
+        setHistoryDays(all.sort((a, b) => (a.date < b.date ? 1 : -1)));
+
+        // Build a filled last-30-days series for the ring/heatmap
+        const map = new Map<string, DayRec>();
+        for (const d of all) map.set(d.date, d);
+        const out: DayRec[] = [];
+        for (let i = 29; i >= 0; i--) {
+          const dt = new Date();
+          dt.setDate(dt.getDate() - i);
+          const key = toLocalDayUtcKey(dt);
+          out.push(map.get(key) ?? { date: key, met_goal: false, totals: {} });
+        }
+        setLast30Days(out);
+      } catch (error) {
+        logError(error, { screen: "history", phase: "load_history_catch" });
       }
-      setLast30Days(out);
     })();
   }, [user]);
 

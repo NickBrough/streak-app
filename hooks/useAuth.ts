@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
+import { logMessage, logError } from "@/lib/sentry";
 
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
@@ -8,20 +9,45 @@ export function useAuth() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
+    logMessage("Auth bootstrap start");
+
+    supabase.auth
+      .getSession()
+      .then(({ data: { session } }) => {
+        setSession(session);
+        setUser(session?.user ?? null);
+        setLoading(false);
+
+        logMessage("Auth bootstrap resolved", {
+          hasSession: Boolean(session),
+          hasUser: Boolean(session?.user),
+        });
+      })
+      .catch((error) => {
+        setLoading(false);
+        logError(error, { phase: "auth_bootstrap_getSession" });
+      });
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
+
+      logMessage("Auth state change", {
+        event,
+        hasSession: Boolean(session),
+        hasUser: Boolean(session?.user),
+      });
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      try {
+        subscription.unsubscribe();
+      } catch (error) {
+        logError(error, { phase: "auth_subscription_unsubscribe" });
+      }
+    };
   }, []);
 
   const signUp = async (email: string, password: string) => {

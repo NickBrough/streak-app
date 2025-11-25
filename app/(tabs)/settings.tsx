@@ -6,6 +6,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/lib/supabase";
 import Screen from "@/components/ui/Screen";
 import ProfileAvatarPicker from "@/components/profile/ProfileAvatarPicker";
+import { logError, logMessage } from "@/lib/sentry";
 
 export default function SettingsScreen() {
   const { user, signOut } = useAuth();
@@ -21,28 +22,48 @@ export default function SettingsScreen() {
   useEffect(() => {
     if (!user) return;
     (async () => {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("handle,avatar_url")
-        .eq("id", user.id)
-        .maybeSingle();
-      if (profile?.handle) setHandle(profile.handle);
-      setAvatarUrl((profile as any)?.avatar_url ?? null);
+      try {
+        const { data: profile, error: profileError } = await supabase
+          .from("profiles")
+          .select("handle,avatar_url")
+          .eq("id", user.id)
+          .maybeSingle();
 
-      const { data: ex } = await supabase
-        .from("exercises")
-        .select("exercise_id,daily_goal,enabled")
-        .eq("user_id", user.id);
-      ex?.forEach((e: any) => {
-        if (e.exercise_id === "pushup") {
-          setPushupGoal(String(e.daily_goal ?? 20));
-          if (typeof e.enabled === "boolean") setPushupEnabled(e.enabled);
+        if (profileError) {
+          logError(profileError, {
+            screen: "settings",
+            phase: "load_profile",
+          });
         }
-        if (e.exercise_id === "squat") {
-          setSquatGoal(String(e.daily_goal ?? 30));
-          if (typeof e.enabled === "boolean") setSquatEnabled(e.enabled);
+
+        if (profile?.handle) setHandle(profile.handle);
+        setAvatarUrl((profile as any)?.avatar_url ?? null);
+
+        const { data: ex, error: exError } = await supabase
+          .from("exercises")
+          .select("exercise_id,daily_goal,enabled")
+          .eq("user_id", user.id);
+
+        if (exError) {
+          logError(exError, {
+            screen: "settings",
+            phase: "load_exercises",
+          });
         }
-      });
+
+        ex?.forEach((e: any) => {
+          if (e.exercise_id === "pushup") {
+            setPushupGoal(String(e.daily_goal ?? 20));
+            if (typeof e.enabled === "boolean") setPushupEnabled(e.enabled);
+          }
+          if (e.exercise_id === "squat") {
+            setSquatGoal(String(e.daily_goal ?? 30));
+            if (typeof e.enabled === "boolean") setSquatEnabled(e.enabled);
+          }
+        });
+      } catch (error) {
+        logError(error, { screen: "settings", phase: "load_settings" });
+      }
     })();
   }, [user]);
 
@@ -98,12 +119,20 @@ export default function SettingsScreen() {
           if (!user) return;
           setSaving(true);
           try {
-            await supabase
+            const { error: profileError } = await supabase
               .from("profiles")
               .upsert({ id: user.id, handle })
               .select()
               .single();
-            await supabase
+
+            if (profileError) {
+              logError(profileError, {
+                screen: "settings",
+                phase: "save_profile",
+              });
+            }
+
+            const { error: exercisesError } = await supabase
               .from("exercises")
               .upsert(
                 [
@@ -123,6 +152,21 @@ export default function SettingsScreen() {
                 { onConflict: "user_id,exercise_id" }
               )
               .select();
+
+            if (exercisesError) {
+              logError(exercisesError, {
+                screen: "settings",
+                phase: "save_exercises",
+              });
+            } else {
+              logMessage("Settings saved", {
+                screen: "settings",
+                pushupGoal,
+                squatGoal,
+                pushupEnabled,
+                squatEnabled,
+              });
+            }
           } finally {
             setSaving(false);
           }

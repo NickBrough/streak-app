@@ -50,13 +50,15 @@
           "motionPermission": "Allow Streak to use motion sensors to count your reps"
         }
       ],
-      "react-native-vision-camera",
-      "sentry-expo"
+      "react-native-vision-camera"
     ],
     "extra": {
       "router": {},
       "eas": {
         "projectId": "acf9dc6d-42df-4922-8966-d76ce3a2a098"
+      },
+      "sentry": {
+        "dsn": "https://36642f8e201bad170255e2fcd2d92fa0@o4510415850242048.ingest.us.sentry.io/4510415876194304"
       }
     }
   }
