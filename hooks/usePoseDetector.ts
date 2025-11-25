@@ -3,6 +3,7 @@ import * as Haptics from "expo-haptics";
 import { PushupDetector, PushupMode } from "@/lib/camera/detectors/pushup";
 import { SquatDetector } from "@/lib/camera/detectors/squat";
 import { Pose } from "@/lib/camera/pose";
+import { logMessage } from "@/lib/sentry";
 
 export type DetectorType =
   | { type: "pushup"; mode: PushupMode }
@@ -33,7 +34,20 @@ export function usePoseDetector(det: DetectorType) {
     if (typeof (res as any).progress === "number")
       setProgress((res as any).progress);
     if (res.didRep) {
-      setReps(res.reps);
+      // Treat didRep as an event and keep local reps as the source of truth
+      // so that manual +/- adjustments and detector-based reps stay in sync.
+      setReps((prev) => prev + 1);
+      try {
+        logMessage("pose_rep_detected", {
+          detectorType: det.type,
+          mode: det.type === "pushup" ? det.mode : undefined,
+          totalReps: (res as any).reps ?? null,
+          confidence: res.confidence,
+          hasProgress: typeof (res as any).progress === "number",
+        });
+      } catch {
+        // Avoid any logging-related crashes
+      }
       try {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       } catch (error) {

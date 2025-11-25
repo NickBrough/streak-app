@@ -22,6 +22,7 @@ import { usePoseDetector } from "@/hooks/usePoseDetector";
 import { usePoseFrame } from "@/hooks/usePoseFrame";
 import { toLocalDayUtcKey } from "@/lib/date";
 import Svg, { Circle, Defs, LinearGradient, Stop } from "react-native-svg";
+import PoseOverlay from "@/components/camera/PoseOverlay";
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
@@ -49,7 +50,13 @@ export default function WorkoutScreen() {
     if (exerciseId === "squat") return { type: "squat" } as const;
     return { type: "pushup" as const, mode: "ground" as const };
   }, [exerciseId]);
-  const { reps: camReps, onPose, addManual } = usePoseDetector(detector);
+  const {
+    reps: camReps,
+    confidence: poseConfidence,
+    progress: poseProgress,
+    onPose,
+    addManual,
+  } = usePoseDetector(detector);
   const [useCameraMode] = useState<boolean>(canUseCamera);
   const [vc, setVc] = useState<any>(null);
   const [authorized, setAuthorized] = useState<boolean | null>(null);
@@ -61,29 +68,21 @@ export default function WorkoutScreen() {
   const glowAnimRef = useRef<Animated.CompositeAnimation | null>(null);
   const insets = useSafeAreaInsets();
 
-  // Check if native pose detector is available
+  // Mark pose detector as "ready" once the camera itself is ready.
+  // The native frame processor plugin is injected by VisionCamera; if it
+  // isn't available, the worklet will safely no-op.
   useEffect(() => {
-    if (!useCameraMode) return;
-    // Check for native pose detector module
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const checkPoseDetector = () => {
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const poseModule = (globalThis as any)?.__pose;
-        if (poseModule && typeof poseModule?.detect === "function") {
-          setPoseDetectorReady(true);
-        } else {
-          setPoseDetectorReady(false);
-        }
-      } catch {
-        setPoseDetectorReady(false);
-      }
-    };
-    checkPoseDetector();
-    // Check periodically in case it loads asynchronously
-    const interval = setInterval(checkPoseDetector, 500);
-    return () => clearInterval(interval);
-  }, [useCameraMode]);
+    if (!useCameraMode) {
+      setPoseDetectorReady(false);
+      return;
+    }
+    const ready =
+      Boolean(vc?.Camera) &&
+      Boolean(cameraDevice) &&
+      authorized === true &&
+      !cameraError;
+    setPoseDetectorReady(ready);
+  }, [useCameraMode, vc, cameraDevice, authorized, cameraError]);
 
   useEffect(() => {
     if (loading || !user || sessionId) return;
@@ -292,6 +291,9 @@ export default function WorkoutScreen() {
       glowAnimRef.current?.stop?.();
     };
   }, [goalMet]);
+
+  const tracking =
+    useCameraMode && poseDetectorReady && poseConfidence >= 0.5;
   return (
     <View style={styles.container}>
       {useCameraMode &&
@@ -306,6 +308,17 @@ export default function WorkoutScreen() {
           isActive
           frameProcessor={frameProcessor}
           frameProcessorFps={24}
+        />
+      ) : null}
+      {useCameraMode &&
+      vc?.Camera &&
+      cameraDevice &&
+      authorized &&
+      !cameraError ? (
+        <PoseOverlay
+          tracking={tracking}
+          reps={camReps}
+          progress={poseProgress}
         />
       ) : null}
       {/* Confetti when goal hit */}

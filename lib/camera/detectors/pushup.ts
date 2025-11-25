@@ -44,9 +44,11 @@ export class PushupDetector {
       const span = Math.max(1e-4, this.maxEyeDist - this.minEyeDist);
       progress = Math.max(0, Math.min(1, (eyeDist - this.minEyeDist) / span));
       confidence = 0.7;
-      if (this.state === "up" && progress > 0.7) {
+      // Balanced thresholds: require a clear move down and back up,
+      // but slightly loosened so typical depth changes are counted.
+      if (this.state === "up" && progress > 0.6) {
         this.state = "down";
-      } else if (this.state === "down" && progress < 0.3) {
+      } else if (this.state === "down" && progress < 0.4) {
         this.state = "up";
         this.reps += 1;
         didRep = true;
@@ -90,6 +92,22 @@ export class PushupDetector {
         didRep = true;
       }
     }
+
+    if (__DEV__ && this.mode === "ground") {
+      // Lightweight debug logging to help tune rep detection in development.
+      // This will be stripped from production bundles.
+      // eslint-disable-next-line no-console
+      console.log("[PushupDetector] ground step", {
+        state: this.state,
+        reps: this.reps,
+        didRep,
+        confidence,
+        progress: Number.isFinite(progress)
+          ? Math.round(progress * 100) / 100
+          : progress,
+      });
+    }
+
     return { reps: this.reps, didRep, confidence, progress };
   }
 }
