@@ -205,7 +205,9 @@ function ensureIosFiles(config) {
 
 function ensureIosPods(config) {
   return withPodfile(config, (config) => {
-    let contents = config.modResults;
+    const modResults = config.modResults;
+    let contents =
+      typeof modResults === "string" ? modResults : modResults.contents;
 
     if (!contents.includes("GoogleMLKit/PoseDetectionAccurate")) {
       contents = contents.replace(
@@ -214,7 +216,12 @@ function ensureIosPods(config) {
       );
     }
 
-    config.modResults = contents;
+    if (typeof modResults === "string") {
+      config.modResults = contents;
+    } else {
+      config.modResults.contents = contents;
+    }
+
     return config;
   });
 }
@@ -226,12 +233,16 @@ function ensureXcodeSources(config) {
     const swiftFile = `${IOS_APP_NAME}/${SWIFT_FILENAME}`;
     const mmFile = `${IOS_APP_NAME}/${MM_FILENAME}`;
 
-    const target = project.getFirstTarget().uuid;
+    const firstTarget = project.getFirstTarget && project.getFirstTarget();
+    const target = firstTarget && firstTarget.uuid;
+    if (!target) {
+      return config;
+    }
 
-    // Add Swift file
-    project.addSourceFile(swiftFile, { target });
-    // Add ObjC++ plugin file
-    project.addSourceFile(mmFile, { target });
+    // Add Swift & ObjC++ files as regular source files (not "Plugins")
+    // to avoid relying on a Plugins group that may not exist yet.
+    project.addSourceFile(swiftFile, { target, plugin: false });
+    project.addSourceFile(mmFile, { target, plugin: false });
 
     return config;
   });
@@ -240,7 +251,11 @@ function ensureXcodeSources(config) {
 const withPoseDetector = (config) => {
   config = ensureIosFiles(config);
   config = ensureIosPods(config);
-  config = ensureXcodeSources(config);
+  // NOTE: We skip automatic Xcode source wiring here because some versions
+  // of the xcode project library expect a Plugins group that may not exist
+  // in fresh Expo projects, causing prebuild to fail. The generated files
+  // will live under ios/streakapp/, and you can add them to the Xcode
+  // target once via Xcode if needed.
   return config;
 };
 
