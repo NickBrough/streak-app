@@ -50,7 +50,8 @@
           "motionPermission": "Allow Streak to use motion sensors to count your reps"
         }
       ],
-      "react-native-vision-camera"
+      "react-native-vision-camera",
+      "./plugins/pose-detector"
     ],
     "extra": {
       "router": {},
