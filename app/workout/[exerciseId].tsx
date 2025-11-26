@@ -19,10 +19,11 @@ import * as Haptics from "expo-haptics";
 import ConfettiCannon from "react-native-confetti-cannon";
 import Constants from "expo-constants";
 import { usePoseDetector } from "@/hooks/usePoseDetector";
-import { usePoseFrame } from "@/hooks/usePoseFrame";
 import { toLocalDayUtcKey } from "@/lib/date";
 import Svg, { Circle, Defs, LinearGradient, Stop } from "react-native-svg";
 import PoseOverlay from "@/components/camera/PoseOverlay";
+import { Camera as PoseCamera } from "react-native-vision-camera-v3-pose-detection";
+import { fromPluginPose } from "@/lib/camera/pose";
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
@@ -58,12 +59,10 @@ export default function WorkoutScreen() {
     addManual,
   } = usePoseDetector(detector);
   const [useCameraMode] = useState<boolean>(canUseCamera);
-  const [vc, setVc] = useState<any>(null);
   const [authorized, setAuthorized] = useState<boolean | null>(null);
   const [cameraDevice, setCameraDevice] = useState<any>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [poseDetectorReady, setPoseDetectorReady] = useState(false);
-  const frameProcessor = usePoseFrame(onPose);
   const glowPulse = useRef(new Animated.Value(0)).current;
   const glowAnimRef = useRef<Animated.CompositeAnimation | null>(null);
   const insets = useSafeAreaInsets();
@@ -77,10 +76,7 @@ export default function WorkoutScreen() {
       return;
     }
     const ready =
-      Boolean(vc?.Camera) &&
-      Boolean(cameraDevice) &&
-      authorized === true &&
-      !cameraError;
+      Boolean(cameraDevice) && authorized === true && !cameraError;
     setPoseDetectorReady(ready);
   }, [useCameraMode, vc, cameraDevice, authorized, cameraError]);
 
@@ -131,7 +127,6 @@ export default function WorkoutScreen() {
         setCameraError("Camera module not available");
         return;
       }
-      setVc(mod);
       (async () => {
         try {
           // Check if Camera methods exist before calling
@@ -297,24 +292,27 @@ export default function WorkoutScreen() {
   return (
     <View style={styles.container}>
       {useCameraMode &&
-      vc?.Camera &&
       cameraDevice &&
       authorized &&
       !cameraError &&
       poseDetectorReady ? (
-        <vc.Camera
+        <PoseCamera
           style={StyleSheet.absoluteFill}
           device={cameraDevice}
           isActive
-          frameProcessor={frameProcessor}
-          frameProcessorFps={24}
+          options={{
+            mode: "stream",
+            performanceMode: "max",
+          }}
+          callback={(pluginPose: any) => {
+            const pose = fromPluginPose(pluginPose);
+            if (pose) {
+              onPose(pose);
+            }
+          }}
         />
       ) : null}
-      {useCameraMode &&
-      vc?.Camera &&
-      cameraDevice &&
-      authorized &&
-      !cameraError ? (
+      {useCameraMode && cameraDevice && authorized && !cameraError ? (
         <PoseOverlay
           tracking={tracking}
           reps={camReps}
