@@ -26,7 +26,10 @@ export default function StreakDisplay({
       <Text style={styles.label}>Current Streak</Text>
       <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 8 }}>
         <Text style={styles.streak}>{currentStreak}</Text>
-        <Text style={styles.streakUnit}>{unit} 🔥</Text>
+        <Text style={styles.streakUnit}>
+          {unit}
+          {currentStreak > 0 ? " 🔥" : ""}
+        </Text>
       </View>
       <Text style={styles.subLabel}>7 day challenge</Text>
       <View style={styles.rowDots}>

@@ -224,7 +224,12 @@ export default function HomeScreen() {
       </View>
 
       <View style={styles.cardGlow}>
-        <StreakDisplay days={last7Days} currentStreak={streak} />
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={() => router.push("/(tabs)/history")}
+        >
+          <StreakDisplay days={last7Days} currentStreak={streak} />
+        </TouchableOpacity>
       </View>
       <View style={{ height: 12 }} />
       <View style={styles.cardGlass}>

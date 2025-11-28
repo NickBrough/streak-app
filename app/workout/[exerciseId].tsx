@@ -19,11 +19,10 @@ import * as Haptics from "expo-haptics";
 import ConfettiCannon from "react-native-confetti-cannon";
 import Constants from "expo-constants";
 import { usePoseDetector } from "@/hooks/usePoseDetector";
+import { usePoseFrame } from "@/hooks/usePoseFrame";
 import { toLocalDayUtcKey } from "@/lib/date";
 import Svg, { Circle, Defs, LinearGradient, Stop } from "react-native-svg";
 import PoseOverlay from "@/components/camera/PoseOverlay";
-import { Camera as PoseCamera } from "react-native-vision-camera-v3-pose-detection";
-import { fromPluginPose } from "@/lib/camera/pose";
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
@@ -35,7 +34,8 @@ export default function WorkoutScreen() {
   const { user, loading } = useAuth();
   const [sessionId, setSessionId] = useState<string | null>(null);
   const isExpoGo = Constants.appOwnership === "expo";
-  const canUseCamera = true;
+  // Disable camera-based pose detection for now and rely on motion + manual reps.
+  const canUseCamera = false;
   const [dailyGoal, setDailyGoal] = useState<number | null>(null);
   const [todayBaseCount, setTodayBaseCount] = useState<number>(0);
   const [goalLoaded, setGoalLoaded] = useState(false);
@@ -59,26 +59,15 @@ export default function WorkoutScreen() {
     addManual,
   } = usePoseDetector(detector);
   const [useCameraMode] = useState<boolean>(canUseCamera);
+  const [vc, setVc] = useState<any>(null);
   const [authorized, setAuthorized] = useState<boolean | null>(null);
   const [cameraDevice, setCameraDevice] = useState<any>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
-  const [poseDetectorReady, setPoseDetectorReady] = useState(false);
   const glowPulse = useRef(new Animated.Value(0)).current;
   const glowAnimRef = useRef<Animated.CompositeAnimation | null>(null);
   const insets = useSafeAreaInsets();
 
-  // Mark pose detector as "ready" once the camera itself is ready.
-  // The native frame processor plugin is injected by VisionCamera; if it
-  // isn't available, the worklet will safely no-op.
-  useEffect(() => {
-    if (!useCameraMode) {
-      setPoseDetectorReady(false);
-      return;
-    }
-    const ready =
-      Boolean(cameraDevice) && authorized === true && !cameraError;
-    setPoseDetectorReady(ready);
-  }, [useCameraMode, vc, cameraDevice, authorized, cameraError]);
+  // No pose detector readiness state needed when camera-based detection is off.
 
   useEffect(() => {
     if (loading || !user || sessionId) return;
@@ -127,6 +116,7 @@ export default function WorkoutScreen() {
         setCameraError("Camera module not available");
         return;
       }
+      setVc(mod);
       (async () => {
         try {
           // Check if Camera methods exist before calling
@@ -287,38 +277,10 @@ export default function WorkoutScreen() {
     };
   }, [goalMet]);
 
-  const tracking =
-    useCameraMode && poseDetectorReady && poseConfidence >= 0.5;
+  const tracking = false;
   return (
     <View style={styles.container}>
-      {useCameraMode &&
-      cameraDevice &&
-      authorized &&
-      !cameraError &&
-      poseDetectorReady ? (
-        <PoseCamera
-          style={StyleSheet.absoluteFill}
-          device={cameraDevice}
-          isActive
-          options={{
-            mode: "stream",
-            performanceMode: "max",
-          }}
-          callback={(pluginPose: any) => {
-            const pose = fromPluginPose(pluginPose);
-            if (pose) {
-              onPose(pose);
-            }
-          }}
-        />
-      ) : null}
-      {useCameraMode && cameraDevice && authorized && !cameraError ? (
-        <PoseOverlay
-          tracking={tracking}
-          reps={camReps}
-          progress={poseProgress}
-        />
-      ) : null}
+      {/* Camera pose detection is disabled; rely on motion detector + manual controls. */}
       {/* Confetti when goal hit */}
       {(() => {
         const n = useCameraMode ? camReps : repCount;
